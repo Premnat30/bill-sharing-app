@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="mb-1"><i class="fas fa-share-alt me-2"></i>Share Bill</h2>
+                <p class="text-muted mb-0">Distribute bill amounts among your friends</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card border-0 shadow">
+            <div class="card-body">
+                <form method="POST" id="shareBillForm">
+                    <!-- Bill Selection -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="bill_id" class="form-label fw-bold">
+                                    <i class="fas fa-receipt me-2 text-primary"></i>Select Bill to Share
+                                </label>
+                                <select class="form-control form-control-lg" id="bill_id" name="bill_id" required onchange="loadBillDetails()">
+                                    <option value="">Choose a bill...</option>
+                                    {% for bill in bills %}
+                                    <option value="{{ bill.id }}">{{ bill.restaurant_name }} - {{ bill.visit_date.strftime('%Y-%m-%d') }} - ${{ "%.2f"|format(bill.total_amount) }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Bill Details</label>
+                                <div id="billDetails" class="card bg-light border-0 p-3">
+                                    <div class="text-center text-muted">
+                                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                        <p class="mb-0">Select a bill to view details</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Friends Selection -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-users me-2 text-success"></i>Select Friends to Share With
+                            </h5>
+                            {% if friends %}
+                            <div class="row" id="friendsSelection">
+                                {% for friend in friends %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card friend-card">
+                                        <div class="card-body p-3">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input friend-checkbox" type="checkbox"
+                                                       name="friend_ids" value="{{ friend.id }}" id="friend{{ friend.id }}"
+                                                       onchange="toggleFriendForm(this)">
+                                                <label class="form-check-label w-100" for="friend{{ friend.id }}">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="avatar-circle me-3">
+                                                            <span class="avatar-text">{{ friend.name[0]|upper }}</span>
+                                                        </div>
+                                                        <div>
+                                                            <h6 class="mb-0">{{ friend.name }}</h6>
+                                                            <small class="text-muted">{{ friend.whatsapp_number }}</small>
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning text-center">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No friends added. <a href="/friends" class="alert-link">Add friends first</a> to share bills.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Food Items & Amounts -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-utensils me-2 text-warning"></i>Food Items & Amounts
+                            </h5>
+                            <div class="alert alert-info">
+                                <i class="fas fa-calculator me-2"></i>
+                                <strong>How it works:</strong> Tax amount and service charge will be equally divided among selected friends. Each friend pays their food amount + equal share of tax + equal share of service charge.
+                            </div>
+                            <div id="friendForms">
+                                <!-- Friend forms will be dynamically added here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Calculation Summary -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="card bg-light border-0">
+                                <div class="card-header bg-transparent">
+                                    <h6 class="mb-0"><i class="fas fa-calculator me-2"></i>Calculation Summary</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="calculationSummary" class="text-muted text-center">
+                                        Select friends and enter amounts to see calculation summary
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a href="/dashboard" class="btn btn-secondary btn-lg me-md-2">
+                                    <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                                </a>
+                                <button type="submit" class="btn btn-primary btn-lg" id="shareButton" disabled>
+                                    <i class="fas fa-share-alt me-1"></i> Share Bill
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .friend-card {
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+        border-radius: 10px;
+    }
+
+    .friend-card:hover {
+        border-color: #667eea;
+        transform: translateY(-2px);
+    }
+
+    .friend-card.selected {
+        border-color: #667eea;
+        background-color: #f8f9ff;
+    }
+
+    .avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    .amount-input-group {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #e9ecef;
+        transition: all 0.3s ease;
+    }
+
+    .amount-input-group:hover {
+        border-color: #667eea;
+        box-shadow: 0 2px 10px rgba(102, 126, 234, 0.1);
+    }
+
+    .calculation-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 5px 0;
+        border-bottom: 1px solid #f1f3f4;
+    }
+
+    .calculation-item:last-child {
+        border-bottom: none;
+        font-weight: bold;
+        color: #2c5aa0;
+    }
+</style>
+
+<script>
+let currentBillDetails = null;
+
+function loadBillDetails() {
+    const billId = document.getElementById('bill_id').value;
+    if (!billId) {
+        document.getElementById('billDetails').innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-info-circle fa-2x mb-2"></i>
+                <p class="mb-0">Select a bill to view details</p>
+            </div>
+        `;
+        currentBillDetails = null;
+        return;
+    }
+
+    fetch(`/get_bill_details/${billId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('billDetails').innerHTML = `
+                    <div class="text-center text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p class="mb-0">Error loading bill details</p>
+                    </div>
+                `;
+                currentBillDetails = null;
+            } else {
+                currentBillDetails = data;
+                document.getElementById('billDetails').innerHTML = `
+                    <div class="bill-details">
+                        <h6 class="text-primary mb-3">${data.restaurant_name}</h6>
+                        <div class="calculation-item">
+                            <span>Base Amount:</span>
+                            <span class="fw-bold">$${data.base_amount.toFixed(2)}</span>
+                        </div>
+                        <div class="calculation-item">
+                            <span>Discount:</span>
+                            <span class="fw-bold text-danger">-$${data.discount_amount.toFixed(2)}</span>
+                        </div>
+                        <div class="calculation-item">
+                            <span>Service Charge:</span>
+                            <span class="fw-bold">$${data.service_charge.toFixed(2)}</span>
+                        </div>
+                        <div class="calculation-item">
+                            <span>Tax Amount:</span>
+                            <span class="fw-bold">$${data.tax_amount.toFixed(2)}</span>
+                        </div>
+                        <div class="calculation-item">
+                            <span>Total Amount:</span>
+                            <span class="fw-bold text-success">$${data.total_amount.toFixed(2)}</span>
+                        </div>
+                    </div>
+                `;
+                updateCalculationSummary();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading bill details:', error);
+            document.getElementById('billDetails').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p class="mb-0">Error loading bill details</p>
+                </div>
+            `;
+            currentBillDetails = null;
+        });
+}
+
+function toggleFriendForm(checkbox) {
+    const friendId = checkbox.value;
+    const friendName = checkbox.closest('.friend-card').querySelector('h6').textContent;
+    const friendForms = document.getElementById('friendForms');
+    const friendCard = checkbox.closest('.friend-card');
+
+    if (checkbox.checked) {
+        // Add form for this friend
+        friendCard.classList.add('selected');
+        const formHtml = `
+            <div class="amount-input-group" id="friendForm${friendId}">
+                <div class="row align-items-center">
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold">Friend</label>
+                        <input type="text" class="form-control" value="${friendName}" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Food Item</label>
+                        <input type="text" class="form-control food-item" name="food_items" placeholder="e.g., Pizza, Burger, etc." required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold">Food Amount ($)</label>
+                        <input type="number" step="0.01" class="form-control food-amount" name="food_amounts" placeholder="0.00" required oninput="updateCalculationSummary()">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Breakdown</label>
+                        <div class="form-control bg-light">
+                            <small>
+                                Food: <span id="foodDisplay${friendId}">$0.00</span> +
+                                Tax: <span id="taxDisplay${friendId}">$0.00</span> +
+                                Service: <span id="serviceDisplay${friendId}">$0.00</span> =
+                                <strong>Total: <span id="totalShare${friendId}" class="text-success">$0.00</span></strong>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        friendForms.insertAdjacentHTML('beforeend', formHtml);
+    } else {
+        // Remove form for this friend
+        friendCard.classList.remove('selected');
+        const formToRemove = document.getElementById(`friendForm${friendId}`);
+        if (formToRemove) {
+            formToRemove.remove();
+        }
+    }
+
+    updateShareButton();
+    updateCalculationSummary();
+}
+
+function updateCalculationSummary() {
+    if (!currentBillDetails) return;
+
+    const checkedFriends = document.querySelectorAll('.friend-checkbox:checked');
+    const summaryDiv = document.getElementById('calculationSummary');
+
+    if (checkedFriends.length === 0) {
+        summaryDiv.innerHTML = '<div class="text-muted text-center">Select friends and enter amounts to see calculation summary</div>';
+        return;
+    }
+
+    // Calculate total food amount from all friends
+    let totalFoodAmount = 0;
+    const foodAmountInputs = document.querySelectorAll('.food-amount');
+    foodAmountInputs.forEach(input => {
+        totalFoodAmount += parseFloat(input.value) || 0;
+    });
+
+    // Calculate tax per person and service charge per person
+    const taxPerPerson = currentBillDetails.tax_amount / checkedFriends.length;
+    const serviceChargePerPerson = currentBillDetails.service_charge / checkedFriends.length;
+
+    // Update individual friend totals and collect summary
+    let summaryHTML = '<div class="text-start">';
+    let friendCalculations = [];
+
+    checkedFriends.forEach(checkbox => {
+        const friendId = checkbox.value;
+        const friendName = checkbox.closest('.friend-card').querySelector('h6').textContent;
+        const foodAmountInput = document.querySelector(`#friendForm${friendId} .food-amount`);
+        const foodAmount = parseFloat(foodAmountInput?.value) || 0;
+        const totalShare = foodAmount + taxPerPerson + serviceChargePerPerson;
+
+        // Update the breakdown display for this friend
+        const foodDisplay = document.getElementById(`foodDisplay${friendId}`);
+        const taxDisplay = document.getElementById(`taxDisplay${friendId}`);
+        const serviceDisplay = document.getElementById(`serviceDisplay${friendId}`);
+        const totalShareElement = document.getElementById(`totalShare${friendId}`);
+
+        if (foodDisplay && taxDisplay && serviceDisplay && totalShareElement) {
+            foodDisplay.textContent = `$${foodAmount.toFixed(2)}`;
+            taxDisplay.textContent = `$${taxPerPerson.toFixed(2)}`;
+            serviceDisplay.textContent = `$${serviceChargePerPerson.toFixed(2)}`;
+            totalShareElement.textContent = `$${totalShare.toFixed(2)}`;
+        }
+
+        friendCalculations.push({
+            name: friendName,
+            foodAmount: foodAmount,
+            taxShare: taxPerPerson,
+            serviceChargeShare: serviceChargePerPerson,
+            totalShare: totalShare
+        });
+    });
+
+    // Build summary display
+    friendCalculations.forEach(calc => {
+        summaryHTML += `
+            <div class="calculation-item">
+                <span>${calc.name}:</span>
+                <span>$${calc.foodAmount.toFixed(2)} (food) + $${calc.taxShare.toFixed(2)} (tax) + $${calc.serviceChargeShare.toFixed(2)} (service) = <strong>$${calc.totalShare.toFixed(2)}</strong></span>
+            </div>
+        `;
+    });
+
+    summaryHTML += `
+        <div class="calculation-item mt-2">
+            <span>Total Food Amount:</span>
+            <span class="fw-bold">$${totalFoodAmount.toFixed(2)}</span>
+        </div>
+        <div class="calculation-item">
+            <span>Total Service Charge:</span>
+            <span class="fw-bold">$${currentBillDetails.service_charge.toFixed(2)}</span>
+        </div>
+        <div class="calculation-item">
+            <span>Total Tax:</span>
+            <span class="fw-bold">$${currentBillDetails.tax_amount.toFixed(2)}</span>
+        </div>
+        <div class="calculation-item">
+            <span>Service Charge per Person:</span>
+            <span class="fw-bold">$${serviceChargePerPerson.toFixed(2)}</span>
+        </div>
+        <div class="calculation-item">
+            <span>Tax per Person:</span>
+            <span class="fw-bold">$${taxPerPerson.toFixed(2)}</span>
+        </div>
+        <div class="calculation-item">
+            <span>Bill Total:</span>
+            <span class="fw-bold text-success">$${currentBillDetails.total_amount.toFixed(2)}</span>
+        </div>
+    `;
+
+    // Check if food amounts match bill base amount
+    const difference = Math.abs(totalFoodAmount - currentBillDetails.base_amount);
+    if (difference > 0.01) {
+        summaryHTML += `
+            <div class="calculation-item mt-2">
+                <span class="text-warning">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Food amounts ($${totalFoodAmount.toFixed(2)}) don't match bill base amount ($${currentBillDetails.base_amount.toFixed(2)})
+                </span>
+            </div>
+        `;
+    } else {
+        summaryHTML += `
+            <div class="calculation-item mt-2">
+                <span class="text-success">
+                    <i class="fas fa-check-circle me-1"></i>
+                    Amounts match perfectly!
+                </span>
+            </div>
+        `;
+    }
+
+    summaryHTML += '</div>';
+    summaryDiv.innerHTML = summaryHTML;
+}
+
+function updateShareButton() {
+    const shareButton = document.getElementById('shareButton');
+    const checkedFriends = document.querySelectorAll('.friend-checkbox:checked');
+    const billSelected = document.getElementById('bill_id').value;
+
+    // Check if all required fields are filled
+    let allFieldsFilled = true;
+    if (checkedFriends.length > 0 && billSelected) {
+        checkedFriends.forEach(checkbox => {
+            const friendId = checkbox.value;
+            const foodItem = document.querySelector(`#friendForm${friendId} .food-item`);
+            const foodAmount = document.querySelector(`#friendForm${friendId} .food-amount`);
+
+            if (!foodItem?.value.trim() || !foodAmount?.value || parseFloat(foodAmount.value) <= 0) {
+                allFieldsFilled = false;
+            }
+        });
+    } else {
+        allFieldsFilled = false;
+    }
+
+    shareButton.disabled = !allFieldsFilled;
+}
+
+// Add event listeners for dynamic validation
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('food-item') || e.target.classList.contains('food-amount')) {
+        updateCalculationSummary();
+        updateShareButton();
+    }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listener for bill selection
+    document.getElementById('bill_id').addEventListener('change', function() {
+        updateShareButton();
+    });
+});
+</script>
+{% endblock %}

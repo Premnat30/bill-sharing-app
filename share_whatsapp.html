@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-success text-white py-3">
+                <h4 class="mb-0"><i class="fab fa-whatsapp me-2"></i>Share Bill via WhatsApp</h4>
+            </div>
+            <div class="card-body p-4">
+                <!-- Bill Summary -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-receipt me-2"></i>Bill Summary
+                        </h5>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Restaurant:</strong> {{ bill.restaurant_name }}<br>
+                                        <strong>Visit Date:</strong> {{ bill.visit_date.strftime('%Y-%m-%d') }}<br>
+                                        <strong>Base Amount:</strong> ${{ "%.2f"|format(bill.base_amount) }}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Service Charge:</strong> ${{ "%.2f"|format(bill.service_charge) }}<br>
+                                        <strong>Tax Amount:</strong> ${{ "%.2f"|format(bill.tax_amount) }}<br>
+                                        <strong>Total Amount:</strong> ${{ "%.2f"|format(bill.total_amount) }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WhatsApp Message Preview -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">
+                            <i class="fas fa-comment me-2 text-success"></i>WhatsApp Message Preview
+                        </h5>
+                        <div class="card">
+                            <div class="card-body bg-light">
+                                <pre style="white-space: pre-wrap; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.5;">{{ whatsapp_message }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sharing Options -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">
+                            <i class="fas fa-share-alt me-2 text-primary"></i>Sharing Options
+                        </h5>
+
+                        <!-- Option 1: Share with all friends in group -->
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-users me-2 text-success"></i>Share with All Friends (Group Message)
+                                </h6>
+                                <p class="card-text">Send the complete bill breakdown to all friends at once.</p>
+                                <a href="https://web.whatsapp.com/send?text={{ whatsapp_message | urlencode }}"
+                                   target="_blank"
+                                   class="btn btn-success">
+                                    <i class="fab fa-whatsapp me-2"></i>Open WhatsApp Web
+                                </a>
+                                <a href="whatsapp://send?text={{ whatsapp_message | urlencode }}"
+                                   class="btn btn-outline-success ms-2">
+                                    <i class="fab fa-whatsapp me-2"></i>Open WhatsApp Mobile
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Option 2: Individual messages -->
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-user me-2 text-primary"></i>Send Individual Messages
+                                </h6>
+                                <p class="card-text">Send personalized messages to each friend with their specific amount.</p>
+
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Friend</th>
+                                                <th>WhatsApp</th>
+                                                <th>Total Share</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for share in bill_shares_data %}
+                                            <tr>
+                                                <td>
+                                                    <strong>{{ share.friend_name }}</strong><br>
+                                                    <small class="text-muted">{{ share.food_item }}: ${{ "%.2f"|format(share.food_amount) }}</small>
+                                                </td>
+                                                <td>{{ share.whatsapp_number }}</td>
+                                                <td><strong class="text-success">${{ "%.2f"|format(share.total_share) }}</strong></td>
+                                                <td>
+                                                    <a href="/send_whatsapp_individual/{{ bill.id }}/{{ share.friend_id }}"
+                                                       class="btn btn-outline-primary btn-sm"
+                                                       target="_blank">
+                                                        <i class="fab fa-whatsapp me-1"></i> Send
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Copy to Clipboard Option -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-copy me-2 text-info"></i>Copy Message to Clipboard
+                                </h6>
+                                <div class="input-group">
+                                    <textarea id="messageText" class="form-control" rows="4" readonly>{{ whatsapp_message }}</textarea>
+                                    <button class="btn btn-outline-primary" type="button" id="copyButton">
+                                        <i class="fas fa-copy me-1"></i> Copy
+                                    </button>
+                                </div>
+                                <div id="copySuccess" class="text-success mt-2" style="display: none;">
+                                    <i class="fas fa-check-circle me-1"></i> Message copied to clipboard!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="/bills" class="btn btn-secondary btn-lg me-md-2">
+                                <i class="fas fa-arrow-left me-1"></i> Back to Bills
+                            </a>
+                            <a href="/share_bill" class="btn btn-primary btn-lg">
+                                <i class="fas fa-share-alt me-1"></i> Share Another Bill
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const copyButton = document.getElementById('copyButton');
+    const messageText = document.getElementById('messageText');
+    const copySuccess = document.getElementById('copySuccess');
+
+    copyButton.addEventListener('click', function() {
+        messageText.select();
+        document.execCommand('copy');
+
+        copySuccess.style.display = 'block';
+        setTimeout(() => {
+            copySuccess.style.display = 'none';
+        }, 3000);
+    });
+
+    // Auto-select text when clicking on textarea
+    messageText.addEventListener('click', function() {
+        this.select();
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-success text-white py-3">
+                <h4 class="mb-0"><i class="fas fa-check-circle me-2"></i>Bill Shared Successfully!</h4>
+            </div>
+            <div class="card-body p-4">
+                <!-- Bill Summary -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-receipt me-2"></i>Bill Summary
+                        </h5>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Restaurant:</strong> {{ bill.restaurant_name }}<br>
+                                        <strong>Visit Date:</strong> {{ bill.visit_date.strftime('%Y-%m-%d') }}<br>
+                                        <strong>Base Amount:</strong> ${{ "%.2f"|format(bill.base_amount) }}<br>
+                                        <strong>Discount Amount:</strong> ${{ "%.2f"|format(bill.discount_amount) }}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Service Charge:</strong> ${{ "%.2f"|format(bill.service_charge) }}<br>
+                                        <strong>Tax Amount:</strong> ${{ "%.2f"|format(bill.tax_amount) }}<br>
+                                        <strong>Total Amount:</strong> ${{ "%.2f"|format(bill.total_amount) }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sharing Details -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="text-success mb-3">
+                            <i class="fas fa-share-alt me-2"></i>Sharing Details
+                        </h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th><i class="fas fa-user me-1"></i> Friend</th>
+                                        <th><i class="fab fa-whatsapp me-1"></i> WhatsApp</th>
+                                        <th><i class="fas fa-utensils me-1"></i> Food Item</th>
+                                        <th><i class="fas fa-money-bill me-1"></i> Food Amount</th>
+                                        <th><i class="fas fa-percentage me-1"></i> Tax Share</th>
+                                        <th><i class="fas fa-concierge-bell me-1"></i> Service Share</th>
+                                        <th><i class="fas fa-calculator me-1"></i> Total Share</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for share in bill_shares_data %}
+                                    <tr>
+                                        <td><strong>{{ share.friend_name }}</strong></td>
+                                        <td>{{ share.whatsapp_number }}</td>
+                                        <td>{{ share.food_item }}</td>
+                                        <td>${{ "%.2f"|format(share.food_amount) }}</td>
+                                        <td>${{ "%.2f"|format(share.tax_share) }}</td>
+                                        <td>${{ "%.2f"|format(share.service_charge_share) }}</td>
+                                        <td><strong class="text-success">${{ "%.2f"|format(share.total_share) }}</strong></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <td colspan="3"><strong>Total</strong></td>
+                                        <td><strong>${{ "%.2f"|format(bill_shares_data|sum(attribute='food_amount')) }}</strong></td>
+                                        <td><strong>${{ "%.2f"|format(bill_shares_data|sum(attribute='tax_share')) }}</strong></td>
+                                        <td><strong>${{ "%.2f"|format(bill_shares_data|sum(attribute='service_charge_share')) }}</strong></td>
+                                        <td><strong class="text-success">${{ "%.2f"|format(bill_shares_data|sum(attribute='total_share')) }}</strong></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calculation Note -->
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Calculation:</strong>
+                    Total service charge of ${{ "%.2f"|format(bill.service_charge) }} and tax of ${{ "%.2f"|format(bill.tax_amount) }}
+                    were equally divided among {{ bill_shares_data|length }} friend(s).
+                    Each friend pays ${{ "%.2f"|format(bill.service_charge / bill_shares_data|length) }} service charge and
+                    ${{ "%.2f"|format(bill.tax_amount / bill_shares_data|length) }} tax.
+                </div>
+
+                <!-- Download Options -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">
+                            <i class="fas fa-download me-2"></i>Download Options
+                        </h5>
+                        <div class="d-grid gap-2 d-md-flex">
+                            <a href="data:text/csv;charset=utf-8,{{ csv_data | urlencode }}"
+                               download="{{ filename }}"
+                               class="btn btn-success btn-lg me-md-2">
+                                <i class="fas fa-file-csv me-2"></i>Download CSV File
+                            </a>
+                            <a href="/share_bill" class="btn btn-primary btn-lg me-md-2">
+                                <i class="fas fa-share-alt me-2"></i>Share Another Bill
+                            </a>
+                            <a href="/dashboard" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-tachometer-alt me-2"></i>Back to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

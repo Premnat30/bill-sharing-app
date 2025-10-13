@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="mb-1"><i class="fas fa-users me-2"></i>My Friends</h2>
+                <p class="text-muted mb-0">Manage your friends list for bill sharing</p>
+            </div>
+            <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#addFriendModal">
+                <i class="fas fa-user-plus me-2"></i>Add New Friend
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card text-white text-center p-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <i class="fas fa-users fa-2x mb-2"></i>
+            <h4 class="mb-0">{{ friends|length }}</h4>
+            <small>Total Friends</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-white text-center p-3" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <i class="fas fa-mobile-alt fa-2x mb-2"></i>
+            <h4 class="mb-0">{{ friends|length }}</h4>
+            <small>WhatsApp Contacts</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-white text-center p-3" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <i class="fas fa-share-alt fa-2x mb-2"></i>
+            <h4 class="mb-0">{{ friends|length }}</h4>
+            <small>Ready to Share</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-white text-center p-3" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+            <i class="fas fa-user-check fa-2x mb-2"></i>
+            <h4 class="mb-0">{{ friends|length }}</h4>
+            <small>Active Friends</small>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        {% if friends %}
+        <div class="card border-0 shadow">
+            <div class="card-header bg-transparent py-3">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Friends List</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4"><i class="fas fa-user me-2"></i>Friend Name</th>
+                                <th><i class="fab fa-whatsapp me-2"></i>WhatsApp Number</th>
+                                <th><i class="fas fa-calendar me-2"></i>Added Date</th>
+                                <th class="text-center"><i class="fas fa-cog me-2"></i>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for friend in friends %}
+                            <tr class="friend-row">
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle me-3">
+                                            <span class="avatar-text">{{ friend.name[0]|upper }}</span>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">{{ friend.name }}</h6>
+                                            <small class="text-muted">Friend #{{ friend.id }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fab fa-whatsapp text-success me-2"></i>
+                                        <span class="phone-number">{{ friend.whatsapp_number }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        {{ friend.created_at.strftime('%b %d, %Y') }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="tooltip" title="Edit Friend">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <a href="/friends/delete/{{ friend.id }}"
+                                           class="btn btn-outline-danger btn-sm"
+                                           data-bs-toggle="tooltip" title="Delete Friend"
+                                           onclick="return confirm('Are you sure you want to delete {{ friend.name }}? This action cannot be undone.')">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-5">
+            <div class="empty-state-icon mb-4">
+                <i class="fas fa-user-friends fa-5x text-muted"></i>
+            </div>
+            <h3 class="text-muted">No Friends Added Yet</h3>
+            <p class="text-muted mb-4">Start by adding your first friend to share bills with them.</p>
+            <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#addFriendModal">
+                <i class="fas fa-user-plus me-2"></i>Add Your First Friend
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Friend Modal -->
+<div class="modal fade" id="addFriendModal" tabindex="-1" aria-labelledby="addFriendModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="addFriendModalLabel">
+                    <i class="fas fa-user-plus me-2"></i>Add New Friend
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="addFriendForm">
+                <div class="modal-body p-4">
+                    <div class="text-center mb-4">
+                        <div class="avatar-circle-lg mx-auto mb-3">
+                            <i class="fas fa-user-plus avatar-icon"></i>
+                        </div>
+                        <p class="text-muted">Add a friend to start sharing bills with them</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="name" class="form-label fw-bold">
+                            <i class="fas fa-user me-2 text-primary"></i>Friend's Name
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="name" name="name"
+                               required placeholder="Enter friend's full name" autocomplete="off">
+                        <div class="form-text">This name will be used for bill sharing</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="whatsapp_number" class="form-label fw-bold">
+                            <i class="fab fa-whatsapp me-2 text-success"></i>WhatsApp Number
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0">
+                                <i class="fas fa-phone text-muted"></i>
+                            </span>
+                            <input type="tel" class="form-control form-control-lg"
+                                   id="whatsapp_number" name="whatsapp_number"
+                                   required placeholder="Enter WhatsApp number"
+                                   autocomplete="off">
+                        </div>
+                        <div class="form-text">Enter phone number without any formatting</div>
+                    </div>
+
+                    <div class="alert alert-info d-flex align-items-center">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <small>You'll be able to share bills with this friend immediately after adding them.</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Add Friend
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .stat-card {
+        border-radius: 15px;
+        border: none;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    .avatar-circle-lg {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 32px;
+    }
+
+    .avatar-text {
+        color: white;
+        font-weight: bold;
+    }
+
+    .avatar-icon {
+        color: white;
+    }
+
+    .friend-row {
+        transition: background-color 0.2s ease;
+    }
+
+    .friend-row:hover {
+        background-color: #f8f9fa;
+    }
+
+    .phone-number {
+        font-family: 'Courier New', monospace;
+        font-weight: 500;
+    }
+
+    .empty-state-icon {
+        opacity: 0.6;
+    }
+
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+
+    .modal-content {
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+    .modal-header {
+        border-bottom: none;
+        padding: 1.5rem;
+    }
+
+    .modal-footer {
+        border-top: 1px solid #dee2e6;
+        padding: 1rem 1.5rem;
+    }
+
+    .table > :not(caption) > * > * {
+        padding: 1rem 0.75rem;
+        vertical-align: middle;
+    }
+</style>
+
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+
+    // Simple phone number validation (only numbers allowed)
+    const phoneInput = document.getElementById('whatsapp_number');
+    phoneInput.addEventListener('input', function(e) {
+        // Remove any non-digit characters
+        e.target.value = e.target.value.replace(/\D/g, '');
+    });
+
+    // Focus on name field when modal opens
+    $('#addFriendModal').on('shown.bs.modal', function () {
+        $('#name').focus();
+    });
+
+    // Form validation
+    document.getElementById('addFriendForm').addEventListener('submit', function(e) {
+        const name = document.getElementById('name').value.trim();
+        const phone = document.getElementById('whatsapp_number').value.trim();
+
+        if (name.length < 2) {
+            e.preventDefault();
+            alert('Please enter a valid name (at least 2 characters)');
+            return;
+        }
+
+        if (phone.length < 10) {
+            e.preventDefault();
+            alert('Please enter a valid WhatsApp number (at least 10 digits)');
+            return;
+        }
+    });
+});
+</script>
+{% endblock %}

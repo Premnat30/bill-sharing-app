@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-primary text-white py-3">
+                <h4 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Add New Bill</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" id="billForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="restaurant_name" class="form-label fw-bold">Restaurant Name</label>
+                                <input type="text" class="form-control form-control-lg" id="restaurant_name" name="restaurant_name" required placeholder="Enter restaurant name">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="visit_date" class="form-label fw-bold">Visit Date</label>
+                                <input type="date" class="form-control form-control-lg" id="visit_date" name="visit_date" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="base_amount" class="form-label fw-bold">Base Amount ($)</label>
+                                <input type="number" step="0.01" class="form-control form-control-lg" id="base_amount" name="base_amount" required placeholder="0.00" oninput="calculateTotal()">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="discount_amount" class="form-label fw-bold">Discount Amount ($)</label>
+                                <input type="number" step="0.01" class="form-control form-control-lg" id="discount_amount" name="discount_amount" value="0" placeholder="0.00" oninput="calculateTotal()">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="service_charge" class="form-label fw-bold">Service Charge ($)</label>
+                                <input type="number" step="0.01" class="form-control form-control-lg" id="service_charge" name="service_charge" value="0" placeholder="0.00" oninput="calculateTotal()">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="tax_amount" class="form-label fw-bold">Tax Amount ($)</label>
+                                <input type="number" step="0.01" class="form-control form-control-lg" id="tax_amount" name="tax_amount" required placeholder="0.00" oninput="calculateTotal()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Calculated Amounts</label>
+                                <div class="card bg-light p-3">
+                                    <div class="row text-center">
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Base Amount</small>
+                                            <span id="base_amount_display" class="fw-bold">$0.00</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Total Charges</small>
+                                            <span id="charges_display" class="fw-bold">$0.00</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Final Total</small>
+                                            <span id="total_amount_display" class="fw-bold text-success fs-5">$0.00</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 text-center">
+                                        <small class="text-muted">Formula: Base - Discount + Service Charge + Tax = Total</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <a href="/bills" class="btn btn-secondary btn-lg me-md-2"><i class="fas fa-arrow-left me-1"></i> Back to Bills</a>
+                        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save me-1"></i> Add Bill</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calculateTotal() {
+    const baseAmount = parseFloat(document.getElementById('base_amount').value) || 0;
+    const discountAmount = parseFloat(document.getElementById('discount_amount').value) || 0;
+    const serviceCharge = parseFloat(document.getElementById('service_charge').value) || 0;
+    const taxAmount = parseFloat(document.getElementById('tax_amount').value) || 0;
+
+    const chargesTotal = serviceCharge + taxAmount - discountAmount;
+    const totalAmount = baseAmount + chargesTotal;
+
+    document.getElementById('base_amount_display').textContent = '$' + baseAmount.toFixed(2);
+    document.getElementById('charges_display').textContent = '$' + chargesTotal.toFixed(2);
+    document.getElementById('total_amount_display').textContent = '$' + totalAmount.toFixed(2);
+}
+
+// Initialize calculation on page load
+document.addEventListener('DOMContentLoaded', function() {
+    calculateTotal();
+});
+</script>
+{% endblock %}

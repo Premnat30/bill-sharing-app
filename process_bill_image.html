@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-success text-white py-3">
+                <h4 class="mb-0"><i class="fas fa-check-circle me-2"></i>Bill Image Processed Successfully!</h4>
+            </div>
+            <div class="card-body p-4">
+                <!-- Extracted Text Preview -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">
+                            <i class="fas fa-text-height me-2 text-primary"></i>Extracted Text from Image
+                        </h5>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <pre style="max-height: 200px; overflow-y: auto; white-space: pre-wrap; font-size: 0.9rem; background: #f8f9fa; padding: 15px; border-radius: 5px;">{{ extracted_text }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auto-detected Amounts -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">
+                            <i class="fas fa-search-dollar me-2 text-success"></i>Auto-detected Amounts
+                        </h5>
+
+                        {% if amounts.total == 0 and amounts.subtotal == 0 %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>No amounts detected automatically.</strong> Please enter the amounts manually below.
+                        </div>
+                        {% endif %}
+
+                        <div class="row">
+                            <div class="col-md-2">
+                                <div class="card text-center {% if amounts.subtotal > 0 %}border-success{% else %}border-warning{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Base Amount</h6>
+                                        <h4 class="{% if amounts.subtotal > 0 %}text-success{% else %}text-muted{% endif %}">
+                                            ${{ "%.2f"|format(amounts.subtotal) }}
+                                        </h4>
+                                        {% if amounts.subtotal == 0 %}
+                                        <small class="text-warning">Not detected</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="card text-center {% if amounts.discount > 0 %}border-warning{% else %}border-light{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Discount</h6>
+                                        <h4 class="{% if amounts.discount > 0 %}text-warning{% else %}text-muted{% endif %}">
+                                            ${{ "%.2f"|format(amounts.discount) }}
+                                        </h4>
+                                        {% if amounts.discount == 0 %}
+                                        <small class="text-muted">Optional</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="card text-center {% if amounts.service_charge > 0 %}border-info{% else %}border-light{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Service Charge</h6>
+                                        <h4 class="{% if amounts.service_charge > 0 %}text-info{% else %}text-muted{% endif %}">
+                                            ${{ "%.2f"|format(amounts.service_charge) }}
+                                        </h4>
+                                        {% if amounts.service_charge == 0 %}
+                                        <small class="text-muted">Optional</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="card text-center {% if amounts.tax > 0 %}border-primary{% else %}border-warning{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Tax Amount</h6>
+                                        <h4 class="{% if amounts.tax > 0 %}text-primary{% else %}text-muted{% endif %}">
+                                            ${{ "%.2f"|format(amounts.tax) }}
+                                        </h4>
+                                        {% if amounts.tax == 0 %}
+                                        <small class="text-warning">Enter manually</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="card text-center {% if amounts.total > 0 %}border-success{% else %}border-danger{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Total Amount</h6>
+                                        <h4 class="{% if amounts.total > 0 %}text-success{% else %}text-danger{% endif %}">
+                                            ${{ "%.2f"|format(amounts.total) }}
+                                        </h4>
+                                        {% if amounts.total == 0 %}
+                                        <small class="text-danger">Required</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bill Creation Form -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <h5 class="mb-3">
+                            <i class="fas fa-edit me-2 text-warning"></i>Create Bill from Extracted Data
+                        </h5>
+                        <form method="POST" action="/create_bill_from_ocr">
+                            <input type="hidden" name="image_filename" value="{{ image_filename }}">
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="restaurant_name" class="form-label fw-bold">
+                                            <i class="fas fa-utensils me-2 text-primary"></i>Restaurant Name
+                                        </label>
+                                        <input type="text" class="form-control form-control-lg" id="restaurant_name" name="restaurant_name" required placeholder="Enter restaurant name">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="visit_date" class="form-label fw-bold">
+                                            <i class="fas fa-calendar me-2 text-primary"></i>Visit Date
+                                        </label>
+                                        <input type="date" class="form-control form-control-lg" id="visit_date" name="visit_date" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info">
+                                <i class="fas fa-lightbulb me-2"></i>
+                                <strong>Manual Entry Required:</strong> Please review and correct the amounts below based on your actual bill.
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="base_amount" class="form-label fw-bold">
+                                            <i class="fas fa-money-bill me-2 text-success"></i>Base Amount ($)
+                                        </label>
+                                        <input type="number" step="0.01" class="form-control form-control-lg" id="base_amount" name="base_amount" value="{{ "%.2f"|format(amounts.subtotal) }}" required placeholder="0.00">
+                                        <div class="form-text">Food & drinks total</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="discount_amount" class="form-label fw-bold">
+                                            <i class="fas fa-tag me-2 text-warning"></i>Discount Amount ($)
+                                        </label>
+                                        <input type="number" step="0.01" class="form-control" id="discount_amount" name="discount_amount" value="{{ "%.2f"|format(amounts.discount) }}" placeholder="0.00">
+                                        <div class="form-text">Any discounts applied</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="service_charge" class="form-label fw-bold">
+                                            <i class="fas fa-concierge-bell me-2 text-info"></i>Service Charge ($)
+                                        </label>
+                                        <input type="number" step="0.01" class="form-control" id="service_charge" name="service_charge" value="{{ "%.2f"|format(amounts.service_charge) }}" placeholder="0.00">
+                                        <div class="form-text">Service fee or tip</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="tax_amount" class="form-label fw-bold">
+                                            <i class="fas fa-percentage me-2 text-danger"></i>Tax Amount ($)
+                                        </label>
+                                        <input type="number" step="0.01" class="form-control" id="tax_amount" name="tax_amount" value="{{ "%.2f"|format(amounts.tax) }}" required placeholder="0.00">
+                                        <div class="form-text">Tax/GST amount</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="mb-3">
+                                        <label for="total_amount" class="form-label fw-bold">
+                                            <i class="fas fa-calculator me-2 text-success"></i>Total Amount ($)
+                                        </label>
+                                        <input type="number" step="0.01" class="form-control form-control-lg bg-light" id="total_amount" name="total_amount" value="{{ "%.2f"|format(amounts.total) }}" required placeholder="0.00" readonly>
+                                        <div class="form-text">Automatically calculated: Base - Discount + Service Charge + Tax</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                <strong>Important:</strong> Ensure the total amount matches the "Amount to Pay" on your bill. If it doesn't match, check that all amounts above are correct.
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a href="/upload_bill_image" class="btn btn-secondary btn-lg me-md-2">
+                                    <i class="fas fa-arrow-left me-1"></i> Upload Different Image
+                                </a>
+                                <a href="/add_bill" class="btn btn-outline-primary btn-lg me-md-2">
+                                    <i class="fas fa-keyboard me-1"></i> Manual Entry
+                                </a>
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-save me-1"></i> Create Bill
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('visit_date').value = today;
+
+    // Auto-calculate total when amounts change
+    function calculateTotal() {
+        const base = parseFloat(document.getElementById('base_amount').value) || 0;
+        const discount = parseFloat(document.getElementById('discount_amount').value) || 0;
+        const service = parseFloat(document.getElementById('service_charge').value) || 0;
+        const tax = parseFloat(document.getElementById('tax_amount').value) || 0;
+
+        const total = base - discount + service + tax;
+        document.getElementById('total_amount').value = total.toFixed(2);
+    }
+
+    // Add event listeners for auto-calculation
+    document.getElementById('base_amount').addEventListener('input', calculateTotal);
+    document.getElementById('discount_amount').addEventListener('input', calculateTotal);
+    document.getElementById('service_charge').addEventListener('input', calculateTotal);
+    document.getElementById('tax_amount').addEventListener('input', calculateTotal);
+
+    // Initial calculation
+    calculateTotal();
+
+    // Highlight empty required fields
+    function highlightEmptyFields() {
+        const requiredFields = document.querySelectorAll('input[required]');
+        requiredFields.forEach(field => {
+            if (!field.value) {
+                field.style.borderColor = '#dc3545';
+            } else {
+                field.style.borderColor = '';
+            }
+        });
+    }
+
+    // Check fields on form submit
+    document.querySelector('form').addEventListener('submit', function(e) {
+        highlightEmptyFields();
+
+        const totalAmount = parseFloat(document.getElementById('total_amount').value) || 0;
+        if (totalAmount <= 0) {
+            e.preventDefault();
+            alert('Please enter valid amounts. Total amount must be greater than 0.');
+            document.getElementById('base_amount').focus();
+        }
+    });
+
+    // Real-time validation
+    const inputs = document.querySelectorAll('input[type="number"]');
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            const value = parseFloat(this.value) || 0;
+            if (value < 0) {
+                this.value = 0;
+                calculateTotal();
+            }
+        });
+    });
+});
+</script>
+
+<style>
+    .card {
+        transition: transform 0.2s ease;
+    }
+    .card:hover {
+        transform: translateY(-2px);
+    }
+    input:invalid {
+        border-color: #dc3545;
+    }
+    input:valid {
+        border-color: #198754;
+    }
+    .form-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}

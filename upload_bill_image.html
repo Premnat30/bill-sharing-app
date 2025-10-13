@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-primary text-white py-3">
+                <h4 class="mb-0"><i class="fas fa-camera me-2"></i>Upload Bill Image</h4>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>How it works:</strong> Upload a clear photo of your restaurant bill, and we'll automatically extract the amounts using AI!
+                </div>
+
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-4 text-center">
+                        <div class="upload-area border-2 border-dashed rounded p-5 bg-light" id="uploadArea">
+                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                            <h5>Drag & Drop Bill Image Here</h5>
+                            <p class="text-muted">or click to select file</p>
+                            <input type="file" name="bill_image" id="bill_image" accept="image/*" class="d-none" required>
+                            <button type="button" class="btn btn-outline-primary mt-2" onclick="document.getElementById('bill_image').click()">
+                                <i class="fas fa-folder-open me-2"></i>Choose File
+                            </button>
+                        </div>
+                        <div id="fileInfo" class="mt-3"></div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Tips for best results:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Take photo in good lighting</li>
+                            <li>Ensure bill is flat and clearly visible</li>
+                            <li>Include the total amount in the photo</li>
+                            <li>Supported formats: JPG, PNG, GIF</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="/add_bill" class="btn btn-secondary btn-lg me-md-2">
+                            <i class="fas fa-keyboard me-1"></i> Manual Entry
+                        </a>
+                        <button type="submit" class="btn btn-primary btn-lg" id="uploadButton">
+                            <i class="fas fa-upload me-1"></i> Process Image
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .upload-area {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .upload-area:hover {
+        border-color: #667eea !important;
+        background-color: #f8f9ff;
+    }
+    .upload-area.dragover {
+        border-color: #667eea !important;
+        background-color: #e3f2fd;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('bill_image');
+    const fileInfo = document.getElementById('fileInfo');
+    const uploadButton = document.getElementById('uploadButton');
+
+    // Drag and drop functionality
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', function() {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            displayFileInfo(files[0]);
+        }
+    });
+
+    // Click to select file
+    uploadArea.addEventListener('click', function() {
+        fileInput.click();
+    });
+
+    // File input change
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            displayFileInfo(this.files[0]);
+        }
+    });
+
+    function displayFileInfo(file) {
+        const fileSize = (file.size / 1024 / 1024).toFixed(2); // MB
+        fileInfo.innerHTML = `
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>File selected:</strong> ${file.name} (${fileSize} MB)
+            </div>
+        `;
+        uploadButton.disabled = false;
+    }
+
+    // Initially disable upload button
+    uploadButton.disabled = true;
+});
+</script>
+{% endblock %}
