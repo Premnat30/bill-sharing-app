@@ -166,13 +166,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const copySuccess = document.getElementById('copySuccess');
 
     copyButton.addEventListener('click', function() {
-        messageText.select();
-        document.execCommand('copy');
-
-        copySuccess.style.display = 'block';
-        setTimeout(() => {
-            copySuccess.style.display = 'none';
-        }, 3000);
+        navigator.clipboard.writeText(messageText.value).then(function() {
+            copySuccess.style.display = 'block';
+            setTimeout(() => {
+                copySuccess.style.display = 'none';
+            }, 3000);
+        }).catch(function(err) {
+            alert('Failed to copy message: ' + err);
+        });
     });
 
     // Auto-select text when clicking on textarea
