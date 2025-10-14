@@ -1,9 +1,15 @@
+import os
+from flask import Flask
+
+# Render configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-123')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///bill_sharing.db').replace('postgres://', 'postgresql://')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-import os
 import csv
 import io
 import sqlite3
