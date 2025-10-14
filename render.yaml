@@ -1,6 +1,7 @@
+# Bill Sharing App - Render Configuration
 services:
   - type: web
-    name: bill-sharing-app
+    name: bill-sharing-appservices:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt

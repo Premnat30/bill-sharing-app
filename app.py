@@ -1,30 +1,23 @@
-import os
-from flask import Flask
-
-# Render configuration
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-123')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///bill_sharing.db').replace('postgres://', 'postgresql://')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, make_response
+iimport os
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import csv
 import io
-import sqlite3
 import requests
 import re
 
 app = Flask(__name__)
 
-# PythonAnywhere configuration
-app.config['SECRET_KEY'] = 'bill-sharing-secret-key-2024'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////home/NPrem30/bill_sharing_app/bill_sharing.db'
+# Render configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bill-sharing-secret-key-2024')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///bill_sharing.db').replace('postgres://', 'postgresql://')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# File upload configuration
-app.config['UPLOAD_FOLDER'] = '/home/NPrem30/bill_sharing_app/uploads'
+# File upload configuration for Render
+app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
@@ -33,7 +26,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
-# Database Models
+# Database Models (keep all your existing models)
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -208,6 +201,7 @@ def initialize_database():
     except Exception as e:
         print(f"Database initialization error: {e}")
 
+# Initialize database
 initialize_database()
 
 # Routes
