@@ -37,7 +37,9 @@ class Friend(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
+    country_code = db.Column(db.String(5), default='+91')  # +91 for India, +65 for Singapore
     whatsapp_number = db.Column(db.String(20), nullable=False)
+    avatar = db.Column(db.String(50), default='avatar1.png')  # Store avatar filename
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Bill(db.Model):
