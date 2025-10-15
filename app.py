@@ -240,7 +240,7 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     user_id = session['user_id']
-    total_friends = Friend.query.filter_by(user_id=user_id).count()
+    total_ = Friend.query.filter_by(user_id=user_id).count()
     total_bills = Bill.query.filter_by(user_id=user_id).count()
     total_spending_result = db.session.query(db.func.sum(Bill.total_amount)).filter_by(user_id=user_id).scalar()
     total_spending = total_spending_result if total_spending_result else 0
@@ -255,14 +255,30 @@ def dashboard():
 def friends():
     if 'user_id' not in session:
         return redirect(url_for('login'))
+    
     if request.method == 'POST':
         name = request.form['name']
+        country_code = request.form['country_code']
         whatsapp_number = request.form['whatsapp_number']
-        friend = Friend(user_id=session['user_id'], name=name, whatsapp_number=whatsapp_number)
+        avatar = request.form.get('avatar', 'avatar1.png')
+        
+        # Validate WhatsApp number
+        if not whatsapp_number.isdigit() or len(whatsapp_number) < 8:
+            flash('Please enter a valid WhatsApp number (8-12 digits)', 'error')
+            return redirect(url_for('friends'))
+        
+        friend = Friend(
+            user_id=session['user_id'], 
+            name=name, 
+            country_code=country_code,
+            whatsapp_number=whatsapp_number,
+            avatar=avatar
+        )
         db.session.add(friend)
         db.session.commit()
         flash('Friend added successfully!', 'success')
         return redirect(url_for('friends'))
+    
     user_friends = Friend.query.filter_by(user_id=session['user_id']).order_by(Friend.created_at.desc()).all()
     return render_template('friends.html', friends=user_friends)
 
@@ -610,6 +626,35 @@ def create_whatsapp_message(bill, bill_shares_data):
         message += f"   *Total: ${share['total_share']:.2f}*\n\n"
     message += "Please transfer your share. Thank you! 🙏"
     return message
+
+@app.route('/send_whatsapp_individual/<int:bill_id>/<int:friend_id>')
+def send_whatsapp_individual(bill_id, friend_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    bill = Bill.query.filter_by(id=bill_id, user_id=session['user_id']).first()
+    friend = Friend.query.filter_by(id=friend_id, user_id=session['user_id']).first()
+    
+    if not bill or not friend:
+        flash('Bill or friend not found', 'error')
+        return redirect(url_for('bills'))
+    
+    share = BillShare.query.filter_by(bill_id=bill_id, friend_id=friend_id).first()
+    if not share:
+        flash('Share not found', 'error')
+        return redirect(url_for('bills'))
+    
+    message = f"Hi {friend.name}! 👋\n\n"
+    message += f"Here's your share for {bill.restaurant_name}:\n"
+    message += f"🍽️ Food: ${share.food_amount:.2f} ({share.food_item})\n"
+    message += f"📊 Tax: ${share.tax_share:.2f}\n"
+    message += f"🔔 Service: ${share.service_charge_share:.2f}\n"
+    message += f"💰 *Total Amount: ${share.total_share:.2f}*\n\n"
+    message += "Please transfer this amount. Thank you! 😊"
+    
+    # Use the friend's country code in the WhatsApp URL
+    whatsapp_url = f"https://wa.me/{friend.country_code}{friend.whatsapp_number}?text={message.replace(' ', '%20').replace('\n', '%0A')}"
+    return redirect(whatsapp_url)
 
 @app.route('/send_whatsapp_individual/<int:bill_id>/<int:friend_id>')
 def send_whatsapp_individual(bill_id, friend_id):
