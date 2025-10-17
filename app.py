@@ -5,6 +5,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from auth_middleware import admin_required, login_required
+
+from functools import wraps
+from flask import session, flash, redirect, url_for
 import csv
 import io
 import requests
@@ -100,6 +103,31 @@ class BillShare(db.Model):
 
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please login first', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please login first', 'error')
+            return redirect(url_for('login'))
+        
+        user = User.query.get(session['user_id'])
+        if not user or not user.is_admin or not getattr(user, 'admin_approved', False):
+            flash('Admin access required. Please wait for admin approval.', 'error')
+            return redirect(url_for('dashboard'))
+            
+        return f(*args, **kwargs)
+    return decorated_function
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
