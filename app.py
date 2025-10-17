@@ -227,14 +227,23 @@ def initialize_database():
 initialize_database()
 
 # Routes
+# Routes - UPDATED
 @app.route('/')
 def index():
-    if 'user_id' in session:
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    """Home page - shows before login"""
+    return render_template('index.html')
+
+@app.route('/home')
+def home():
+    """Home page alternative"""
+    return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # If user is already logged in, redirect to dashboard
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -243,7 +252,6 @@ def login():
             session['user_id'] = user.id
             session['username'] = user.username
             session['is_admin'] = user.is_admin
-            # ADD THIS LINE - store role in session
             session['role'] = user.role
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
@@ -251,18 +259,12 @@ def login():
             flash('Invalid username or password', 'error')
     return render_template('login.html')
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    flash('You have been logged out', 'info')
-    return redirect(url_for('login'))
-
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     user_id = session['user_id']
-    total_friends = Friend.query.filter_by(user_id=user_id).count()  # FIXED: Changed total_ to total_friends
+    total_friends = Friend.query.filter_by(user_id=user_id).count()
     total_bills = Bill.query.filter_by(user_id=user_id).count()
     total_spending_result = db.session.query(db.func.sum(Bill.total_amount)).filter_by(user_id=user_id).scalar()
     total_spending = total_spending_result if total_spending_result else 0
@@ -276,10 +278,14 @@ def dashboard():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # If user is already logged in, redirect to dashboard
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        role = request.form.get('role', 'user')  # Get role from form
+        role = request.form.get('role', 'user')
         
         # Check if user already exists
         existing_user = User.query.filter_by(username=username).first()
@@ -294,7 +300,7 @@ def register():
             username=username,
             password=generate_password_hash(password),
             is_admin=is_admin,
-            role=role  # Add role field
+            role=role
         )
         
         db.session.add(new_user)
