@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
+from auth_middleware import admin_required, login_required
 import csv
 import io
 import requests
@@ -68,6 +69,14 @@ class BillShare(db.Model):
 
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(120), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+    # ADD THIS LINE - role field for more granular control
+    role = db.Column(db.String(20), default='user')  # 'admin', 'user', 'moderator'
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -223,6 +232,8 @@ def login():
             session['user_id'] = user.id
             session['username'] = user.username
             session['is_admin'] = user.is_admin
+            # ADD THIS LINE - store role in session
+            session['role'] = user.role
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -250,6 +261,40 @@ def dashboard():
                          total_bills=total_bills,
                          total_spending=total_spending,
                          recent_bills=recent_bills)
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        role = request.form.get('role', 'user')  # Get role from form
+        
+        # Check if user already exists
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists', 'error')
+            return render_template('register.html')
+        
+        # Determine if_admin based on role
+        is_admin = (role == 'admin')
+        
+        new_user = User(
+            username=username,
+            password=generate_password_hash(password),
+            is_admin=is_admin,
+            role=role  # Add role field
+        )
+        
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
+
 
 @app.route('/friends', methods=['GET', 'POST'])
 def friends():
@@ -318,6 +363,7 @@ def delete_bill(bill_id):
     return redirect(url_for('bills'))
 
 @app.route('/add_bill', methods=['GET', 'POST'])
+@admin_required
 def add_bill():
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -437,6 +483,7 @@ def generate_bill_shares_csv(bill, bill_shares_data):
     return output.getvalue()
 
 @app.route('/get_bill_details/<int:bill_id>')
+@admin_required
 def get_bill_details(bill_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'})
@@ -454,6 +501,7 @@ def get_bill_details(bill_id):
 
 # NEW IMAGE UPLOAD & OCR ROUTES
 @app.route('/upload_bill_image', methods=['GET', 'POST'])
+@admin_required
 def upload_bill_image():
     if 'user_id' not in session:
         return redirect(url_for('login'))
