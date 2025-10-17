@@ -12,9 +12,14 @@ import re
 
 app = Flask(__name__)
 
-# Render configuration
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bill-sharing-secret-key-2024')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///bill_sharing.db').replace('postgres://', 'postgresql://')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key')
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///bill_sharing.db')
+
+# Handle PostgreSQL URL for Render
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # File upload configuration for Render
@@ -704,6 +709,77 @@ def send_whatsapp_individual(bill_id, friend_id):
     # Use the friend's country code in the WhatsApp URL
     whatsapp_url = f"https://wa.me/{friend.country_code}{friend.whatsapp_number}?text={message.replace(' ', '%20').replace('\n', '%0A')}"
     return redirect(whatsapp_url)
+
+# Add this at the VERY END of app.py - AFTER all your routes
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return render_template('500.html'), 500
+
+# Database migration function
+def migrate_database():
+    """Run database migrations for role-based access control"""
+    try:
+        with app.app_context():
+            # Check if role column exists in User table
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            columns = [col['name'] for col in inspector.get_columns('user')]
+            
+            if 'role' not in columns:
+                print("Adding role column to user table...")
+                # For SQLite (development)
+                if 'sqlite' in database_url:
+                    db.engine.execute('ALTER TABLE user ADD COLUMN role VARCHAR(20)')
+                # For PostgreSQL (production)
+                else:
+                    db.engine.execute('ALTER TABLE "user" ADD COLUMN role VARCHAR(20)')
+                
+                # Set default roles for existing users
+                users = User.query.all()
+                for user in users:
+                    if not hasattr(user, 'role') or user.role is None:
+                        user.role = 'admin' if user.is_admin else 'user'
+                
+                db.session.commit()
+                print("Database migration completed successfully!")
+            else:
+                print("Role column already exists. Migration not needed.")
+                
+    except Exception as e:
+        print(f"Migration error: {e}")
+        db.session.rollback()
+
+# Initialize database with migration
+def initialize_database():
+    try:
+        with app.app_context():
+            db.create_all()
+            
+            # Run migration
+            migrate_database()
+            
+            # Create default admin user if it doesn't exist
+            if not User.query.filter_by(username='admin').first():
+                admin_user = User(
+                    username='admin',
+                    password=generate_password_hash('admin123'),
+                    is_admin=True,
+                    role='admin'
+                )
+                db.session.add(admin_user)
+                db.session.commit()
+                print("Default admin user created successfully")
+                
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+
+# Initialize database when app starts
+initialize_database()
 
 if __name__ == '__main__':
     app.run(debug=True)
