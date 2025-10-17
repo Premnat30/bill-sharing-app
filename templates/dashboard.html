@@ -53,7 +53,13 @@
                 <a class="nav-link active" href="/dashboard"><i class="fas fa-tachometer-alt me-1"></i>Dashboard</a>
                 <a class="nav-link" href="/friends"><i class="fas fa-users me-1"></i>Friends</a>
                 <a class="nav-link" href="/bills"><i class="fas fa-file-invoice me-1"></i>Bills</a>
+                
+                <!-- ADD CONDITIONAL ADMIN MENU ITEMS -->
+                {% if session.get('role') == 'admin' or session.get('is_admin') %}
                 <a class="nav-link" href="/add_bill"><i class="fas fa-plus-circle me-1"></i>Add Bill</a>
+                <a class="nav-link" href="/upload_bill_image"><i class="fas fa-upload me-1"></i>Upload Bill</a>
+                {% endif %}
+                
                 <a class="nav-link" href="/share_bill"><i class="fas fa-share-alt me-1"></i>Share Bill</a>
                 <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt me-1"></i>Logout ({{ session.username }})</a>
             </div>
@@ -75,7 +81,14 @@
         <!-- Dashboard Header -->
         <div class="dashboard-header text-center">
             <h1 class="display-5 fw-bold">Welcome back, {{ session.username }}! 👋</h1>
-            <p class="lead">Manage your bills and expenses with ease</p>
+            <p class="lead">
+                {% if session.get('role') == 'admin' or session.get('is_admin') %}
+                <span class="badge bg-warning text-dark"><i class="fas fa-crown me-1"></i>Administrator</span>
+                {% else %}
+                <span class="badge bg-info"><i class="fas fa-user me-1"></i>User</span>
+                {% endif %}
+                - Manage your bills and expenses with ease
+            </p>
         </div>
 
         <!-- Statistics Cards -->
@@ -106,18 +119,53 @@
             </div>
         </div>
 
-        <!-- Quick Actions -->
+        <!-- ADD ADMIN QUICK ACTIONS SECTION -->
+        {% if session.get('role') == 'admin' or session.get('is_admin') %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-crown me-2"></i>Admin Quick Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <button class="btn btn-warning w-100 py-3" onclick="location.href='/add_bill'">
+                                    <i class="fas fa-plus-circle fa-2x mb-2"></i><br>
+                                    Add New Bill
+                                </button>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-info w-100 py-3 text-white" onclick="location.href='/upload_bill_image'">
+                                    <i class="fas fa-upload fa-2x mb-2"></i><br>
+                                    Upload Bill Image
+                                </button>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-success w-100 py-3" onclick="location.href='/share_bill'">
+                                    <i class="fas fa-share-alt fa-2x mb-2"></i><br>
+                                    Share Bill
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions (FOR ALL USERS) -->
         <div class="row g-3 mb-5">
             <div class="col-md-6">
-                <button class="btn quick-action-btn w-100" onclick="location.href='/add_bill'">
-                    <i class="fas fa-plus-circle fa-2x mb-2"></i><br>
-                    Add New Bill
+                <button class="btn quick-action-btn w-100" onclick="location.href='/friends'">
+                    <i class="fas fa-users fa-2x mb-2"></i><br>
+                    Manage Friends
                 </button>
             </div>
             <div class="col-md-6">
-                <button class="btn quick-action-btn w-100" onclick="location.href='/share_bill'">
-                    <i class="fas fa-share-alt fa-2x mb-2"></i><br>
-                    Share Bill
+                <button class="btn quick-action-btn w-100" onclick="location.href='/bills'">
+                    <i class="fas fa-file-invoice fa-2x mb-2"></i><br>
+                    View All Bills
                 </button>
             </div>
         </div>
@@ -158,7 +206,11 @@
                     <i class="fas fa-file-invoice fa-4x text-muted mb-3"></i>
                     <h5 class="text-muted">No bills found</h5>
                     <p class="text-muted">Start by adding your first bill!</p>
+                    {% if session.get('role') == 'admin' or session.get('is_admin') %}
                     <a href="/add_bill" class="btn btn-primary">Add Your First Bill</a>
+                    {% else %}
+                    <p class="text-muted">Contact an admin to add bills</p>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
