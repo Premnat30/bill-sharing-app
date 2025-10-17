@@ -46,29 +46,30 @@
 <body style="background-color: #f8f9fa;">
     <!-- SINGLE NAVIGATION BAR - REMOVED DUPLICATE -->
     <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">
-                <i class="fas fa-receipt me-2"></i>BillShare
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="/">
+            <i class="fas fa-receipt me-2"></i>BillShare
+        </a>
+        <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Home</a>
+            <a class="nav-link active" href="/dashboard"><i class="fas fa-tachometer-alt me-1"></i>Dashboard</a>
+            <a class="nav-link" href="/friends"><i class="fas fa-users me-1"></i>Friends</a>
+            <a class="nav-link" href="/bills"><i class="fas fa-file-invoice me-1"></i>Bills</a>
+            
+            <!-- ADD ADMIN MENU ITEMS HERE -->
+            {% if session.get('role') == 'admin' and session.get('admin_approved') %}
+            <a class="nav-link" href="/add_bill"><i class="fas fa-plus-circle me-1"></i>Add Bill</a>
+            <a class="nav-link" href="/upload_bill_image"><i class="fas fa-upload me-1"></i>Upload Bill</a>
+            <a class="nav-link" href="/admin/approvals"><i class="fas fa-user-shield me-1"></i>Admin Approvals</a>
+            {% endif %}
+            
+            <a class="nav-link" href="/share_bill"><i class="fas fa-share-alt me-1"></i>Share Bill</a>
+            <a class="nav-link" href="/logout" onclick="return confirmLogout()">
+                <i class="fas fa-sign-out-alt me-1"></i>Logout ({{ session.username }})
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Home</a>
-                <a class="nav-link active" href="/dashboard"><i class="fas fa-tachometer-alt me-1"></i>Dashboard</a>
-                <a class="nav-link" href="/friends"><i class="fas fa-users me-1"></i>Friends</a>
-                <a class="nav-link" href="/bills"><i class="fas fa-file-invoice me-1"></i>Bills</a>
-                
-                <!-- CONDITIONAL ADMIN MENU ITEMS -->
-                {% if session.get('role') == 'admin' or session.get('is_admin') %}
-                <a class="nav-link" href="/add_bill"><i class="fas fa-plus-circle me-1"></i>Add Bill</a>
-                <a class="nav-link" href="/upload_bill_image"><i class="fas fa-upload me-1"></i>Upload Bill</a>
-                {% endif %}
-                
-                <a class="nav-link" href="/share_bill"><i class="fas fa-share-alt me-1"></i>Share Bill</a>
-                <a class="nav-link" href="/logout" onclick="return confirmLogout()">
-                    <i class="fas fa-sign-out-alt me-1"></i>Logout ({{ session.username }})
-                </a>
-            </div>
         </div>
-    </nav>
+    </div>
+</nav>
 
     <div class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
