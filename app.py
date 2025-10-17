@@ -32,8 +32,20 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
-# Database Models (keep all your existing models)
-# Database Models - FIXED VERSION
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(120), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+    role = db.Column(db.String(20), default='user')
+    
+    # ADD THESE NEW FIELDS FOR ADMIN APPROVAL SYSTEM
+    admin_requested = db.Column(db.Boolean, default=False)
+    admin_approved = db.Column(db.Boolean, default=False)
+    approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
 class User(db.Model):
     __tablename__ = 'user'
     __table_args__ = {'extend_existing': True}  # ADD THIS LINE
@@ -278,8 +290,7 @@ def dashboard():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration page"""
-    # If user is already logged in, redirect to dashboard
+    """User registration page with admin approval system"""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
@@ -308,24 +319,123 @@ def register():
             flash('Username already exists', 'error')
             return render_template('register.html')
         
-        # Determine if_admin based on role
+        # Handle admin registration differently
         is_admin = (role == 'admin')
+        admin_requested = (role == 'admin')
+        admin_approved = False
+        
+        # Auto-approve if it's the first user (super admin)
+        first_user = User.query.count() == 0
+        if first_user and role == 'admin':
+            admin_approved = True
+            is_admin = True
+            flash('Super admin account created successfully!', 'success')
         
         # Create new user
         new_user = User(
             username=username,
             password=generate_password_hash(password),
             is_admin=is_admin,
-            role=role
+            role=role,
+            admin_requested=admin_requested,
+            admin_approved=admin_approved
         )
         
         db.session.add(new_user)
         db.session.commit()
         
-        flash('Registration successful! Please login.', 'success')
+        if role == 'admin' and not first_user:
+            flash('Admin registration requested! Please wait for approval from existing admin.', 'warning')
+        else:
+            flash('Registration successful! Please login.', 'success')
+        
         return redirect(url_for('login'))
     
     return render_template('register.html')
+
+@app.route('/admin/approvals')
+@admin_required
+def admin_approvals():
+    """Admin panel to view and approve admin requests"""
+    # Get pending admin requests
+    pending_requests = User.query.filter(
+        User.admin_requested == True,
+        User.admin_approved == False
+    ).all()
+    
+    # Get all admins
+    all_admins = User.query.filter(
+        User.is_admin == True,
+        User.admin_approved == True
+    ).all()
+    
+    return render_template('admin_approvals.html',
+                         pending_requests=pending_requests,
+                         all_admins=all_admins)
+
+@app.route('/admin/approve/<int:user_id>')
+@admin_required
+def approve_admin(user_id):
+    """Approve an admin request"""
+    user_to_approve = User.query.get_or_404(user_id)
+    current_user = User.query.get(session['user_id'])
+    
+    if not user_to_approve.admin_requested:
+        flash('This user has not requested admin access', 'error')
+        return redirect(url_for('admin_approvals'))
+    
+    user_to_approve.is_admin = True
+    user_to_approve.admin_approved = True
+    user_to_approve.approved_by = current_user.id
+    user_to_approve.approved_at = datetime.utcnow()
+    
+    db.session.commit()
+    
+    flash(f'Admin access approved for {user_to_approve.username}', 'success')
+    return redirect(url_for('admin_approvals'))
+
+@app.route('/admin/reject/<int:user_id>')
+@admin_required
+def reject_admin(user_id):
+    """Reject an admin request"""
+    user_to_reject = User.query.get_or_404(user_id)
+    
+    if not user_to_reject.admin_requested:
+        flash('This user has not requested admin access', 'error')
+        return redirect(url_for('admin_approvals'))
+    
+    user_to_reject.admin_requested = False
+    user_to_reject.is_admin = False
+    
+    db.session.commit()
+    
+    flash(f'Admin request rejected for {user_to_reject.username}', 'info')
+    return redirect(url_for('admin_approvals'))
+
+@app.route('/admin/revoke/<int:user_id>')
+@admin_required
+def revoke_admin(user_id):
+    """Revoke admin privileges (only for super admin)"""
+    current_user = User.query.get(session['user_id'])
+    user_to_revoke = User.query.get_or_404(user_id)
+    
+    # Prevent self-revocation and revoking super admin
+    if user_to_revoke.id == current_user.id:
+        flash('You cannot revoke your own admin privileges', 'error')
+        return redirect(url_for('admin_approvals'))
+    
+    if user_to_revoke.username == 'admin':
+        flash('Cannot revoke super admin privileges', 'error')
+        return redirect(url_for('admin_approvals'))
+    
+    user_to_revoke.is_admin = False
+    user_to_revoke.admin_approved = False
+    user_to_revoke.admin_requested = False
+    
+    db.session.commit()
+    
+    flash(f'Admin privileges revoked for {user_to_revoke.username}', 'success')
+    return redirect(url_for('admin_approvals'))
 
 
 
