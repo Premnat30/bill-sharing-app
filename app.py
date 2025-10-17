@@ -33,22 +33,33 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 db = SQLAlchemy(app)
 
 # Database Models (keep all your existing models)
+# Database Models - FIXED VERSION
 class User(db.Model):
+    __tablename__ = 'user'
+    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
+    
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    role = db.Column(db.String(20), default='user')  # New role field
 
 class Friend(db.Model):
+    __tablename__ = 'friend'
+    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
+    
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    country_code = db.Column(db.String(5), default='+91')  # +91 for India, +65 for Singapore
+    country_code = db.Column(db.String(5), default='+91')
     whatsapp_number = db.Column(db.String(20), nullable=False)
-    avatar = db.Column(db.String(50), default='avatar1.png')  # Store avatar filename
+    avatar = db.Column(db.String(50), default='avatar1.png')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Bill(db.Model):
+    __tablename__ = 'bill'
+    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
+    
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     restaurant_name = db.Column(db.String(200), nullable=False)
@@ -62,6 +73,9 @@ class Bill(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class BillShare(db.Model):
+    __tablename__ = 'bill_share'
+    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
+    
     id = db.Column(db.Integer, primary_key=True)
     bill_id = db.Column(db.Integer, db.ForeignKey('bill.id'), nullable=False)
     friend_id = db.Column(db.Integer, db.ForeignKey('friend.id'), nullable=False)
@@ -74,14 +88,6 @@ class BillShare(db.Model):
 
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
-    # ADD THIS LINE - role field for more granular control
-    role = db.Column(db.String(20), default='user')  # 'admin', 'user', 'moderator'
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
