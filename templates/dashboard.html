@@ -69,7 +69,15 @@
             <a class="nav-link active" href="/dashboard"><i class="fas fa-tachometer-alt me-1"></i>Dashboard</a>
                 
                 <a class="nav-link" href="/share_bill"><i class="fas fa-share-alt me-1"></i>Share Bill</a>
-                <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt me-1"></i>Logout ({{ session.username }})</a>
+                <a class="nav-link" href="/logout" onclick="return confirmLogout()">
+    <i class="fas fa-sign-out-alt me-1"></i>Logout ({{ session.username }})
+</a>
+
+<script>
+function confirmLogout() {
+    return confirm('Are you sure you want to logout?');
+}
+</script>
             </div>
         </div>
     </nav>
