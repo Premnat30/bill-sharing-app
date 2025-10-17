@@ -722,6 +722,24 @@ def send_whatsapp_individual(bill_id, friend_id):
     whatsapp_url = f"https://wa.me/{friend.country_code}{friend.whatsapp_number}?text={message.replace(' ', '%20').replace('\n', '%0A')}"
     return redirect(whatsapp_url)
 
+@app.route('/logout')
+def logout():
+    """Enhanced logout route with confirmation page"""
+    # If user is not logged in, redirect to home
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    
+    # Store username for goodbye message
+    username = session.get('username', 'User')
+    session.clear()
+    flash(f'Goodbye {username}! You have been logged out successfully.', 'info')
+    return redirect(url_for('logout_confirmation'))
+
+@app.route('/logout/confirm')
+def logout_confirmation():
+    """Logout confirmation page"""
+    return render_template('logout.html')
+
 # Add this at the VERY END of app.py - AFTER all your routes
 @app.errorhandler(404)
 def not_found_error(error):
