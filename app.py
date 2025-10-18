@@ -92,16 +92,17 @@ class ChatMessage(db.Model):
     
     user = db.relationship('User', backref='chat_messages')
 
-# Import AI service safely
+# Import AI service
+
 try:
     from ai_service import ai_service
-    print("✅ AI service loaded")
+    print("✅ AI service loaded successfully")
 except ImportError as e:
     print(f"⚠️ AI service not available: {e}")
-    # Create a simple fallback
+    # Create fallback
     class FallbackAIService:
         def generate_response(self, message, context=None):
-            return "I'm here to help with bill sharing! Ask me about adding bills, splitting expenses, or managing friends."
+            return "I'm here to help with bill sharing! Ask me about bills, friends, or expense tracking."
     ai_service = FallbackAIService()
 
 # Define decorators
