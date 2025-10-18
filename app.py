@@ -33,26 +33,7 @@ from werkzeug.utils import secure_filename
 
 db = SQLAlchemy(app)
 
-# Define decorators directly
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please login first', 'error')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please login first', 'error')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-# Your models start here...
+# Database Models
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -111,28 +92,19 @@ class ChatMessage(db.Model):
     
     user = db.relationship('User', backref='chat_messages')
 
-# Initialize database
-def initialize_database():
-    try:
-        with app.app_context():
-            db.create_all()
-            if not User.query.filter_by(username='admin').first():
-                admin_user = User(
-                    username='admin',
-                    password=generate_password_hash('admin123'),
-                    is_admin=True,
-                    role='admin',
-                    admin_requested=True,
-                    admin_approved=True
-                )
-                db.session.add(admin_user)
-                db.session.commit()
-                print("✅ Database initialized successfully")
-    except Exception as e:
-        print(f"⚠️ Database initialization: {e}")
+# Import AI service safely
+try:
+    from ai_service import ai_service
+    print("✅ AI service loaded")
+except ImportError as e:
+    print(f"⚠️ AI service not available: {e}")
+    # Create a simple fallback
+    class FallbackAIService:
+        def generate_response(self, message, context=None):
+            return "I'm here to help with bill sharing! Ask me about adding bills, splitting expenses, or managing friends."
+    ai_service = FallbackAIService()
 
-initialize_database()
-
+# Define decorators
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -157,6 +129,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Helper functions
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -209,10 +182,8 @@ def extract_amounts_from_text(text):
 
     # Clean and normalize the text
     text_lower = text.lower()
-    text_clean = re.sub(r'[^\w\s\.\$:]', ' ', text_lower)  # Remove special chars except $, ., :
-    text_clean = re.sub(r'\s+', ' ', text_clean)  # Normalize spaces
-
-    print(f"Cleaned OCR Text: {text_clean}")  # Debug output
+    text_clean = re.sub(r'[^\w\s\.\$:]', ' ', text_lower)
+    text_clean = re.sub(r'\s+', ' ', text_clean)
 
     # Try to extract amounts using patterns
     for amount_type, pattern_list in patterns.items():
@@ -220,44 +191,27 @@ def extract_amounts_from_text(text):
             matches = re.findall(pattern, text_clean)
             if matches:
                 try:
-                    # Take the last match (often the final amount in bill)
                     amounts[amount_type] = float(matches[-1])
-                    print(f"Found {amount_type}: {amounts[amount_type]}")  # Debug
                     break
                 except ValueError:
                     continue
 
     # If total not found, look for currency patterns
     if amounts['total'] == 0:
-        # Look for $ amounts specifically
         currency_matches = re.findall(r'\$?\s*(\d+\.?\d*)', text_clean)
         if currency_matches:
             try:
-                # Filter reasonable amounts (not too small, not too large)
                 valid_amounts = [float(amt) for amt in currency_matches
                                if 1.0 <= float(amt) <= 10000.0]
                 if valid_amounts:
                     amounts['total'] = max(valid_amounts)
-                    print(f"Found total from currency: {amounts['total']}")  # Debug
             except:
                 pass
 
     # If subtotal not found but total is found, assume subtotal is close to total
     if amounts['subtotal'] == 0 and amounts['total'] > 0:
         amounts['subtotal'] = amounts['total'] - amounts['tax'] - amounts['service_charge'] + amounts['discount']
-        if amounts['subtotal'] > 0:
-            print(f"Calculated subtotal: {amounts['subtotal']}")  # Debug
 
-    # Ensure amounts make logical sense
-    if amounts['total'] > 0:
-        # If tax+service+subtotal doesn't match total, adjust
-        calculated_total = amounts['subtotal'] - amounts['discount'] + amounts['service_charge'] + amounts['tax']
-        if abs(calculated_total - amounts['total']) > 1.0:  # If difference > $1
-            # Recalculate based on total
-            if amounts['subtotal'] == 0:
-                amounts['subtotal'] = amounts['total'] - amounts['tax'] - amounts['service_charge'] + amounts['discount']
-
-    print(f"Final amounts: {amounts}")  # Debug
     return amounts
 
 def ocr_space_file(filename, overlay=False, api_key='helloworld', language='eng'):
@@ -275,6 +229,58 @@ def ocr_space_file(filename, overlay=False, api_key='helloworld', language='eng'
         )
     return r.json()
 
+def generate_bill_shares_csv(bill, bill_shares_data):
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Bill Sharing Details'])
+    writer.writerow([])
+    writer.writerow(['Restaurant:', bill.restaurant_name])
+    writer.writerow(['Visit Date:', bill.visit_date.strftime('%Y-%m-%d')])
+    writer.writerow(['Base Amount:', f"${bill.base_amount:.2f}"])
+    writer.writerow(['Discount Amount:', f"${bill.discount_amount:.2f}"])
+    writer.writerow(['Service Charge:', f"${bill.service_charge:.2f}"])
+    writer.writerow(['Tax Amount:', f"${bill.tax_amount:.2f}"])
+    writer.writerow(['Total Amount:', f"${bill.total_amount:.2f}"])
+    writer.writerow(['Generated On:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    writer.writerow([])
+    writer.writerow(['Friend Name', 'WhatsApp Number', 'Food Item', 'Food Amount', 'Tax Share', 'Service Charge Share', 'Total Share'])
+    total_food = 0
+    total_tax = 0
+    total_service_charge = 0
+    total_share = 0
+    for share in bill_shares_data:
+        writer.writerow([
+            share['friend_name'],
+            share['whatsapp_number'],
+            share['food_item'],
+            f"${share['food_amount']:.2f}",
+            f"${share['tax_share']:.2f}",
+            f"${share['service_charge_share']:.2f}",
+            f"${share['total_share']:.2f}"
+        ])
+        total_food += share['food_amount']
+        total_tax += share['tax_share']
+        total_service_charge += share['service_charge_share']
+        total_share += share['total_share']
+    writer.writerow([])
+    writer.writerow(['TOTAL', '', '', f"${total_food:.2f}", f"${total_tax:.2f}", f"${total_service_charge:.2f}", f"${total_share:.2f}"])
+    return output.getvalue()
+
+def create_whatsapp_message(bill, bill_shares_data):
+    message = f"🍽️ *Bill Sharing - {bill.restaurant_name}*\n"
+    message += f"Date: {bill.visit_date.strftime('%Y-%m-%d')}\n"
+    message += f"Total Amount: ${bill.total_amount:.2f}\n\n"
+    message += "*Individual Shares:*\n"
+    for share in bill_shares_data:
+        message += f"👤 {share['friend_name']}:\n"
+        message += f"   Food: ${share['food_amount']:.2f} ({share['food_item']})\n"
+        message += f"   Tax: ${share['tax_share']:.2f}\n"
+        message += f"   Service: ${share['service_charge_share']:.2f}\n"
+        message += f"   *Total: ${share['total_share']:.2f}*\n\n"
+    message += "Please transfer your share. Thank you! 🙏"
+    return message
+
+# Initialize database
 def initialize_database():
     try:
         with app.app_context():
@@ -283,32 +289,30 @@ def initialize_database():
                 admin_user = User(
                     username='admin',
                     password=generate_password_hash('admin123'),
-                    is_admin=True
+                    is_admin=True,
+                    role='admin',
+                    admin_requested=True,
+                    admin_approved=True
                 )
                 db.session.add(admin_user)
                 db.session.commit()
-                print("Default admin user created successfully")
+                print("✅ Database initialized successfully")
     except Exception as e:
-        print(f"Database initialization error: {e}")
+        print(f"⚠️ Database initialization: {e}")
 
-# Initialize database
-initialize_database()
-
+with app.app_context():
+    initialize_database()
 # Routes
-# Routes - UPDATED
 @app.route('/')
 def index():
-    """Home page - shows before login"""
     return render_template('index.html')
 
 @app.route('/home')
 def home():
-    """Home page alternative"""
     return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # If user is already logged in, redirect to dashboard
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
@@ -321,32 +325,37 @@ def login():
             session['username'] = user.username
             session['is_admin'] = user.is_admin
             session['role'] = user.role
+            session['admin_approved'] = getattr(user, 'admin_approved', False)
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid username or password', 'error')
     return render_template('login.html')
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been logged out successfully.', 'info')
+    return redirect(url_for('login'))
+
 @app.route('/dashboard')
+@login_required
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     user_id = session['user_id']
     total_friends = Friend.query.filter_by(user_id=user_id).count()
     total_bills = Bill.query.filter_by(user_id=user_id).count()
     total_spending_result = db.session.query(db.func.sum(Bill.total_amount)).filter_by(user_id=user_id).scalar()
     total_spending = total_spending_result if total_spending_result else 0
     recent_bills = Bill.query.filter_by(user_id=user_id).order_by(Bill.created_at.desc()).limit(5).all()
+    
     return render_template('dashboard.html',
                          total_friends=total_friends,
                          total_bills=total_bills,
                          total_spending=total_spending,
                          recent_bills=recent_bills)
 
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration page with admin approval system"""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
@@ -356,7 +365,6 @@ def register():
         confirm_password = request.form['confirm_password']
         role = request.form.get('role', 'user')
         
-        # Validation
         if not username or not password:
             flash('Please fill in all fields', 'error')
             return render_template('register.html')
@@ -369,25 +377,20 @@ def register():
             flash('Password must be at least 6 characters', 'error')
             return render_template('register.html')
         
-        # Check if user already exists
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
             flash('Username already exists', 'error')
             return render_template('register.html')
         
-        # Handle admin registration differently
         is_admin = (role == 'admin')
         admin_requested = (role == 'admin')
         admin_approved = False
         
-        # Auto-approve if it's the first user (super admin)
         first_user = User.query.count() == 0
         if first_user and role == 'admin':
             admin_approved = True
             is_admin = True
-            flash('Super admin account created successfully!', 'success')
         
-        # Create new user
         new_user = User(
             username=username,
             password=generate_password_hash(password),
@@ -401,100 +404,14 @@ def register():
         db.session.commit()
         
         if role == 'admin' and not first_user:
-            flash('Admin registration requested! Please wait for approval from existing admin.', 'warning')
+            flash('Admin registration requested! Please wait for approval.', 'warning')
         else:
             flash('Registration successful! Please login.', 'success')
         
         return redirect(url_for('login'))
     
     return render_template('register.html')
-
-@app.route('/admin/approvals')
-@admin_required
-def admin_approvals():
-    """Admin panel to view and approve admin requests"""
-    # Get pending admin requests
-    pending_requests = User.query.filter(
-        User.admin_requested == True,
-        User.admin_approved == False
-    ).all()
     
-    # Get all admins
-    all_admins = User.query.filter(
-        User.is_admin == True,
-        User.admin_approved == True
-    ).all()
-    
-    return render_template('admin_approvals.html',
-                         pending_requests=pending_requests,
-                         all_admins=all_admins)
-
-@app.route('/admin/approve/<int:user_id>')
-@admin_required
-def approve_admin(user_id):
-    """Approve an admin request"""
-    user_to_approve = User.query.get_or_404(user_id)
-    current_user = User.query.get(session['user_id'])
-    
-    if not user_to_approve.admin_requested:
-        flash('This user has not requested admin access', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    user_to_approve.is_admin = True
-    user_to_approve.admin_approved = True
-    user_to_approve.approved_by = current_user.id
-    user_to_approve.approved_at = datetime.utcnow()
-    
-    db.session.commit()
-    
-    flash(f'Admin access approved for {user_to_approve.username}', 'success')
-    return redirect(url_for('admin_approvals'))
-
-@app.route('/admin/reject/<int:user_id>')
-@admin_required
-def reject_admin(user_id):
-    """Reject an admin request"""
-    user_to_reject = User.query.get_or_404(user_id)
-    
-    if not user_to_reject.admin_requested:
-        flash('This user has not requested admin access', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    user_to_reject.admin_requested = False
-    user_to_reject.is_admin = False
-    
-    db.session.commit()
-    
-    flash(f'Admin request rejected for {user_to_reject.username}', 'info')
-    return redirect(url_for('admin_approvals'))
-
-@app.route('/admin/revoke/<int:user_id>')
-@admin_required
-def revoke_admin(user_id):
-    """Revoke admin privileges (only for super admin)"""
-    current_user = User.query.get(session['user_id'])
-    user_to_revoke = User.query.get_or_404(user_id)
-    
-    # Prevent self-revocation and revoking super admin
-    if user_to_revoke.id == current_user.id:
-        flash('You cannot revoke your own admin privileges', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    if user_to_revoke.username == 'admin':
-        flash('Cannot revoke super admin privileges', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    user_to_revoke.is_admin = False
-    user_to_revoke.admin_approved = False
-    user_to_revoke.admin_requested = False
-    
-    db.session.commit()
-    
-    flash(f'Admin privileges revoked for {user_to_revoke.username}', 'success')
-    return redirect(url_for('admin_approvals'))
-
-
-
 @app.route('/friends', methods=['GET', 'POST'])
 def friends():
     if 'user_id' not in session:
@@ -907,26 +824,14 @@ def send_whatsapp_individual(bill_id, friend_id):
 @app.route('/ai-chat')
 @login_required
 def ai_chat():
-    """AI Chat interface"""
-    # Get user's recent chat history
     chat_history = ChatMessage.query.filter_by(user_id=session['user_id']).order_by(ChatMessage.created_at.desc()).limit(10).all()
-    chat_history.reverse()  # Show oldest first
+    chat_history.reverse()
     
-    # Get user's bill context for AI
-    user_bills = Bill.query.filter_by(user_id=session['user_id']).order_by(Bill.created_at.desc()).limit(5).all()
-    bill_context = f"User has {len(user_bills)} recent bills. "
-    if user_bills:
-        total_spent = sum(bill.total_amount for bill in user_bills)
-        bill_context += f"Recently spent ${total_spent:.2f} across {len(user_bills)} bills."
-    
-    return render_template('ai_chat.html', 
-                         chat_history=chat_history,
-                         bill_context=bill_context)
+    return render_template('ai_chat.html', chat_history=chat_history)
 
 @app.route('/api/chat/send', methods=['POST'])
 @login_required
 def send_chat_message():
-    """Send message to AI and get response"""
     try:
         data = request.get_json()
         user_message = data.get('message', '').strip()
@@ -934,19 +839,8 @@ def send_chat_message():
         if not user_message:
             return jsonify({'error': 'Message cannot be empty'}), 400
         
-        # Get user context for better responses
-        user_bills = Bill.query.filter_by(user_id=session['user_id']).all()
-        user_friends = Friend.query.filter_by(user_id=session['user_id']).all()
+        ai_response = ai_service.generate_response(user_message)
         
-        user_context = f"User has {len(user_bills)} total bills and {len(user_friends)} friends."
-        if user_bills:
-            total_spent = sum(bill.total_amount for bill in user_bills)
-            user_context += f" Total spending: ${total_spent:.2f}."
-        
-        # Get AI response
-        ai_response = ai_service.generate_response(user_message, user_context)
-        
-        # Save to database
         chat_message = ChatMessage(
             user_id=session['user_id'],
             message=user_message,
@@ -964,73 +858,17 @@ def send_chat_message():
         })
         
     except Exception as e:
-        print(f"Chat error: {e}")
         return jsonify({'error': 'Failed to process message'}), 500
 
-@app.route('/api/chat/clear', methods=['POST'])
-@login_required
-def clear_chat_history():
-    """Clear user's chat history"""
-    try:
-        ChatMessage.query.filter_by(user_id=session['user_id']).delete()
-        db.session.commit()
-        return jsonify({'success': True, 'message': 'Chat history cleared'})
-    except Exception as e:
-        return jsonify({'error': 'Failed to clear history'}), 500
+# Error handlers
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('404.html'), 404
 
-@app.route('/api/chat/bill-help', methods=['POST'])
-@login_required
-def get_bill_help():
-    """Get AI help for specific bill questions"""
-    try:
-        data = request.get_json()
-        bill_id = data.get('bill_id')
-        question = data.get('question', '').strip()
-        
-        if not question:
-            return jsonify({'error': 'Question cannot be empty'}), 400
-        
-        # Get bill details for context
-        bill = Bill.query.filter_by(id=bill_id, user_id=session['user_id']).first()
-        if not bill:
-            return jsonify({'error': 'Bill not found'}), 404
-        
-        bill_context = f"""
-        Bill Details:
-        - Restaurant: {bill.restaurant_name}
-        - Date: {bill.visit_date}
-        - Base Amount: ${bill.base_amount:.2f}
-        - Tax: ${bill.tax_amount:.2f}
-        - Total: ${bill.total_amount:.2f}
-        """
-        
-        # Get shares for this bill
-        shares = BillShare.query.filter_by(bill_id=bill_id).all()
-        if shares:
-            bill_context += f"\nThis bill is split among {len(shares)} friends."
-        
-        full_question = f"About this bill: {question}"
-        ai_response = ai_service.generate_response(full_question, bill_context)
-        
-        # Save to database
-        chat_message = ChatMessage(
-            user_id=session['user_id'],
-            message=full_question,
-            response=ai_response,
-            message_type='bill_help'
-        )
-        
-        db.session.add(chat_message)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'response': ai_response
-        })
-        
-    except Exception as e:
-        print(f"Bill help error: {e}")
-        return jsonify({'error': 'Failed to get bill help'}), 500
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return render_template('500.html'), 500
 
 @app.route('/logout')
 def logout():
