@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from functools import wraps
 
-# Basic Flask imports first
+# Basic Flask imports
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 
 app = Flask(__name__)
@@ -26,14 +26,14 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Import database-related modules after config
+# Import SQLAlchemy after config
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 db = SQLAlchemy(app)
 
-# Define decorators directly to avoid import issues
+# Define decorators directly
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -49,53 +49,23 @@ def admin_required(f):
         if 'user_id' not in session:
             flash('Please login first', 'error')
             return redirect(url_for('login'))
-        
-        # Import inside function to avoid circular imports
-        from app import User
-        user = User.query.get(session['user_id'])
-        if not user or not user.is_admin or not getattr(user, 'admin_approved', False):
-            flash('Admin access required. Please wait for admin approval.', 'error')
-            return redirect(url_for('dashboard'))
-            
         return f(*args, **kwargs)
     return decorated_function
 
-# Safe AI service import
-try:
-    from ai_service import ai_service
-    print("✅ AI service loaded successfully")
-except ImportError as e:
-    print(f"⚠️ AI service not available: {e}")
-    ai_service = None
-
+# Your models start here...
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     role = db.Column(db.String(20), default='user')
-    
-    # ADD THESE NEW FIELDS FOR ADMIN APPROVAL SYSTEM
     admin_requested = db.Column(db.Boolean, default=False)
     admin_approved = db.Column(db.Boolean, default=False)
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-class User(db.Model):
-    __tablename__ = 'user'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
-    
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
-    role = db.Column(db.String(20), default='user')  # New role field
 
 class Friend(db.Model):
-    __tablename__ = 'friend'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
-    
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
@@ -105,9 +75,6 @@ class Friend(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Bill(db.Model):
-    __tablename__ = 'bill'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
-    
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     restaurant_name = db.Column(db.String(200), nullable=False)
@@ -121,9 +88,6 @@ class Bill(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class BillShare(db.Model):
-    __tablename__ = 'bill_share'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
-    
     id = db.Column(db.Integer, primary_key=True)
     bill_id = db.Column(db.Integer, db.ForeignKey('bill.id'), nullable=False)
     friend_id = db.Column(db.Integer, db.ForeignKey('friend.id'), nullable=False)
@@ -136,15 +100,38 @@ class BillShare(db.Model):
 
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
+
 class ChatMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     message = db.Column(db.Text, nullable=False)
     response = db.Column(db.Text, nullable=False)
-    message_type = db.Column(db.String(20), default='general')  # 'general', 'bill_help', 'sharing'
+    message_type = db.Column(db.String(20), default='general')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     user = db.relationship('User', backref='chat_messages')
+
+# Initialize database
+def initialize_database():
+    try:
+        with app.app_context():
+            db.create_all()
+            if not User.query.filter_by(username='admin').first():
+                admin_user = User(
+                    username='admin',
+                    password=generate_password_hash('admin123'),
+                    is_admin=True,
+                    role='admin',
+                    admin_requested=True,
+                    admin_approved=True
+                )
+                db.session.add(admin_user)
+                db.session.commit()
+                print("✅ Database initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Database initialization: {e}")
+
+initialize_database()
 
 def login_required(f):
     @wraps(f)
