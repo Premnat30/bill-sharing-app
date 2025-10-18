@@ -1,65 +1,72 @@
-import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
-from datetime import datetime
-from auth_middleware import admin_required, login_required
-from ai_service import ai_service
-from functools import wraps
-from flask import session, flash, redirect, url_for
+mport os
 import csv
 import io
 import requests
 import re
+from datetime import datetime
+from functools import wraps
+
+# Basic Flask imports first
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 
 app = Flask(__name__)
 
+# Configuration
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///bill_sharing.db')
 
-# Handle PostgreSQL URL for Render
 if database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# File upload configuration for Render
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-# Create upload directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Import database-related modules after config
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 db = SQLAlchemy(app)
 
+# Define decorators directly to avoid import issues
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please login first', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please login first', 'error')
+            return redirect(url_for('login'))
+        
+        # Import inside function to avoid circular imports
+        from app import User
+        user = User.query.get(session['user_id'])
+        if not user or not user.is_admin or not getattr(user, 'admin_approved', False):
+            flash('Admin access required. Please wait for admin approval.', 'error')
+            return redirect(url_for('dashboard'))
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Safe AI service import
 try:
-    from auth_middleware import admin_required, login_required
     from ai_service import ai_service
+    print("✅ AI service loaded successfully")
 except ImportError as e:
-    print(f"⚠️ Import warning: {e}")
-    # Define fallback decorators if imports fail
-    def login_required(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'user_id' not in session:
-                flash('Please login first', 'error')
-                return redirect(url_for('login'))
-            return f(*args, **kwargs)
-        return decorated_function
-    
-    def admin_required(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'user_id' not in session:
-                flash('Please login first', 'error')
-                return redirect(url_for('login'))
-            return f(*args, **kwargs)
-        return decorated_function
-
-
+    print(f"⚠️ AI service not available: {e}")
+    ai_service = None
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
