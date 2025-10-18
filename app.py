@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from auth_middleware import admin_required, login_required
-
+from ai_service import ai_service
 from functools import wraps
 from flask import session, flash, redirect, url_for
 import csv
@@ -103,7 +103,15 @@ class BillShare(db.Model):
 
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
-
+class ChatMessage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    response = db.Column(db.Text, nullable=False)
+    message_type = db.Column(db.String(20), default='general')  # 'general', 'bill_help', 'sharing'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref='chat_messages')
 
 def login_required(f):
     @wraps(f)
@@ -875,6 +883,134 @@ def send_whatsapp_individual(bill_id, friend_id):
     # Use the friend's country code in the WhatsApp URL
     whatsapp_url = f"https://wa.me/{friend.country_code}{friend.whatsapp_number}?text={message.replace(' ', '%20').replace('\n', '%0A')}"
     return redirect(whatsapp_url)
+
+@app.route('/ai-chat')
+@login_required
+def ai_chat():
+    """AI Chat interface"""
+    # Get user's recent chat history
+    chat_history = ChatMessage.query.filter_by(user_id=session['user_id']).order_by(ChatMessage.created_at.desc()).limit(10).all()
+    chat_history.reverse()  # Show oldest first
+    
+    # Get user's bill context for AI
+    user_bills = Bill.query.filter_by(user_id=session['user_id']).order_by(Bill.created_at.desc()).limit(5).all()
+    bill_context = f"User has {len(user_bills)} recent bills. "
+    if user_bills:
+        total_spent = sum(bill.total_amount for bill in user_bills)
+        bill_context += f"Recently spent ${total_spent:.2f} across {len(user_bills)} bills."
+    
+    return render_template('ai_chat.html', 
+                         chat_history=chat_history,
+                         bill_context=bill_context)
+
+@app.route('/api/chat/send', methods=['POST'])
+@login_required
+def send_chat_message():
+    """Send message to AI and get response"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        
+        if not user_message:
+            return jsonify({'error': 'Message cannot be empty'}), 400
+        
+        # Get user context for better responses
+        user_bills = Bill.query.filter_by(user_id=session['user_id']).all()
+        user_friends = Friend.query.filter_by(user_id=session['user_id']).all()
+        
+        user_context = f"User has {len(user_bills)} total bills and {len(user_friends)} friends."
+        if user_bills:
+            total_spent = sum(bill.total_amount for bill in user_bills)
+            user_context += f" Total spending: ${total_spent:.2f}."
+        
+        # Get AI response
+        ai_response = ai_service.generate_response(user_message, user_context)
+        
+        # Save to database
+        chat_message = ChatMessage(
+            user_id=session['user_id'],
+            message=user_message,
+            response=ai_response,
+            message_type='general'
+        )
+        
+        db.session.add(chat_message)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'response': ai_response,
+            'message_id': chat_message.id
+        })
+        
+    except Exception as e:
+        print(f"Chat error: {e}")
+        return jsonify({'error': 'Failed to process message'}), 500
+
+@app.route('/api/chat/clear', methods=['POST'])
+@login_required
+def clear_chat_history():
+    """Clear user's chat history"""
+    try:
+        ChatMessage.query.filter_by(user_id=session['user_id']).delete()
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Chat history cleared'})
+    except Exception as e:
+        return jsonify({'error': 'Failed to clear history'}), 500
+
+@app.route('/api/chat/bill-help', methods=['POST'])
+@login_required
+def get_bill_help():
+    """Get AI help for specific bill questions"""
+    try:
+        data = request.get_json()
+        bill_id = data.get('bill_id')
+        question = data.get('question', '').strip()
+        
+        if not question:
+            return jsonify({'error': 'Question cannot be empty'}), 400
+        
+        # Get bill details for context
+        bill = Bill.query.filter_by(id=bill_id, user_id=session['user_id']).first()
+        if not bill:
+            return jsonify({'error': 'Bill not found'}), 404
+        
+        bill_context = f"""
+        Bill Details:
+        - Restaurant: {bill.restaurant_name}
+        - Date: {bill.visit_date}
+        - Base Amount: ${bill.base_amount:.2f}
+        - Tax: ${bill.tax_amount:.2f}
+        - Total: ${bill.total_amount:.2f}
+        """
+        
+        # Get shares for this bill
+        shares = BillShare.query.filter_by(bill_id=bill_id).all()
+        if shares:
+            bill_context += f"\nThis bill is split among {len(shares)} friends."
+        
+        full_question = f"About this bill: {question}"
+        ai_response = ai_service.generate_response(full_question, bill_context)
+        
+        # Save to database
+        chat_message = ChatMessage(
+            user_id=session['user_id'],
+            message=full_question,
+            response=ai_response,
+            message_type='bill_help'
+        )
+        
+        db.session.add(chat_message)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'response': ai_response
+        })
+        
+    except Exception as e:
+        print(f"Bill help error: {e}")
+        return jsonify({'error': 'Failed to get bill help'}), 500
 
 @app.route('/logout')
 def logout():
