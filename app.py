@@ -82,29 +82,6 @@ class BillShare(db.Model):
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
 
-class ChatMessage(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    message = db.Column(db.Text, nullable=False)
-    response = db.Column(db.Text, nullable=False)
-    message_type = db.Column(db.String(20), default='general')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    user = db.relationship('User', backref='chat_messages')
-
-# Import AI service
-
-try:
-    from ai_service import ai_service
-    print("✅ AI service loaded successfully")
-except ImportError as e:
-    print(f"⚠️ AI service not available: {e}")
-    # Create fallback
-    class FallbackAIService:
-        def generate_response(self, message, context=None):
-            return "I'm here to help with bill sharing! Ask me about bills, friends, or expense tracking."
-    ai_service = FallbackAIService()
-
 # Define decorators
 def login_required(f):
     @wraps(f)
@@ -303,6 +280,7 @@ def initialize_database():
 
 with app.app_context():
     initialize_database()
+
 # Routes
 @app.route('/')
 def index():
@@ -562,43 +540,6 @@ def share_bill():
     bills = Bill.query.filter_by(user_id=user_id).order_by(Bill.visit_date.desc()).all()
     return render_template('share_bill.html', friends=friends, bills=bills)
 
-def generate_bill_shares_csv(bill, bill_shares_data):
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['Bill Sharing Details'])
-    writer.writerow([])
-    writer.writerow(['Restaurant:', bill.restaurant_name])
-    writer.writerow(['Visit Date:', bill.visit_date.strftime('%Y-%m-%d')])
-    writer.writerow(['Base Amount:', f"${bill.base_amount:.2f}"])
-    writer.writerow(['Discount Amount:', f"${bill.discount_amount:.2f}"])
-    writer.writerow(['Service Charge:', f"${bill.service_charge:.2f}"])
-    writer.writerow(['Tax Amount:', f"${bill.tax_amount:.2f}"])
-    writer.writerow(['Total Amount:', f"${bill.total_amount:.2f}"])
-    writer.writerow(['Generated On:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-    writer.writerow([])
-    writer.writerow(['Friend Name', 'WhatsApp Number', 'Food Item', 'Food Amount', 'Tax Share', 'Service Charge Share', 'Total Share'])
-    total_food = 0
-    total_tax = 0
-    total_service_charge = 0
-    total_share = 0
-    for share in bill_shares_data:
-        writer.writerow([
-            share['friend_name'],
-            share['whatsapp_number'],
-            share['food_item'],
-            f"${share['food_amount']:.2f}",
-            f"${share['tax_share']:.2f}",
-            f"${share['service_charge_share']:.2f}",
-            f"${share['total_share']:.2f}"
-        ])
-        total_food += share['food_amount']
-        total_tax += share['tax_share']
-        total_service_charge += share['service_charge_share']
-        total_share += share['total_share']
-    writer.writerow([])
-    writer.writerow(['TOTAL', '', '', f"${total_food:.2f}", f"${total_tax:.2f}", f"${total_service_charge:.2f}", f"${total_share:.2f}"])
-    return output.getvalue()
-
 @app.route('/get_bill_details/<int:bill_id>')
 @admin_required
 def get_bill_details(bill_id):
@@ -616,7 +557,7 @@ def get_bill_details(bill_id):
         })
     return jsonify({'error': 'Bill not found'})
 
-# NEW IMAGE UPLOAD & OCR ROUTES
+# IMAGE UPLOAD & OCR ROUTES
 @app.route('/upload_bill_image', methods=['GET', 'POST'])
 @admin_required
 def upload_bill_image():
@@ -750,7 +691,7 @@ def create_bill_from_ocr():
         print(f"Exception: {e}")  # Debug
         return redirect(url_for('upload_bill_image'))
 
-# NEW WHATSAPP ROUTES
+# WHATSAPP ROUTES
 @app.route('/share_bill_whatsapp/<int:bill_id>')
 def share_bill_whatsapp(bill_id):
     if 'user_id' not in session:
@@ -778,21 +719,6 @@ def share_bill_whatsapp(bill_id):
                          bill_shares_data=bill_shares_data,
                          whatsapp_message=message)
 
-def create_whatsapp_message(bill, bill_shares_data):
-    message = f"🍽️ *Bill Sharing - {bill.restaurant_name}*\n"
-    message += f"Date: {bill.visit_date.strftime('%Y-%m-%d')}\n"
-    message += f"Total Amount: ${bill.total_amount:.2f}\n\n"
-    message += "*Individual Shares:*\n"
-    for share in bill_shares_data:
-        message += f"👤 {share['friend_name']}:\n"
-        message += f"   Food: ${share['food_amount']:.2f} ({share['food_item']})\n"
-        message += f"   Tax: ${share['tax_share']:.2f}\n"
-        message += f"   Service: ${share['service_charge_share']:.2f}\n"
-        message += f"   *Total: ${share['total_share']:.2f}*\n\n"
-    message += "Please transfer your share. Thank you! 🙏"
-    return message
-
-# FIXED: Removed duplicate route - KEEP ONLY THIS ONE
 @app.route('/send_whatsapp_individual/<int:bill_id>/<int:friend_id>')
 def send_whatsapp_individual(bill_id, friend_id):
     if 'user_id' not in session:
@@ -822,45 +748,6 @@ def send_whatsapp_individual(bill_id, friend_id):
     whatsapp_url = f"https://wa.me/{friend.country_code}{friend.whatsapp_number}?text={message.replace(' ', '%20').replace('\n', '%0A')}"
     return redirect(whatsapp_url)
 
-@app.route('/ai-chat')
-@login_required
-def ai_chat():
-    chat_history = ChatMessage.query.filter_by(user_id=session['user_id']).order_by(ChatMessage.created_at.desc()).limit(10).all()
-    chat_history.reverse()
-    
-    return render_template('ai_chat.html', chat_history=chat_history)
-
-@app.route('/api/chat/send', methods=['POST'])
-@login_required
-def send_chat_message():
-    try:
-        data = request.get_json()
-        user_message = data.get('message', '').strip()
-        
-        if not user_message:
-            return jsonify({'error': 'Message cannot be empty'}), 400
-        
-        ai_response = ai_service.generate_response(user_message)
-        
-        chat_message = ChatMessage(
-            user_id=session['user_id'],
-            message=user_message,
-            response=ai_response,
-            message_type='general'
-        )
-        
-        db.session.add(chat_message)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'response': ai_response,
-            'message_id': chat_message.id
-        })
-        
-    except Exception as e:
-        return jsonify({'error': 'Failed to process message'}), 500
-
 # Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
@@ -888,16 +775,6 @@ def logout():
 def logout_confirmation():
     """Logout confirmation page"""
     return render_template('logout.html')
-
-# Add this at the VERY END of app.py - AFTER all your routes
-@app.errorhandler(404)
-def not_found_error(error):
-    return render_template('404.html'), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    db.session.rollback()
-    return render_template('500.html'), 500
 
 # Database migration function
 def migrate_database():
