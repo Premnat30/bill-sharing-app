@@ -293,15 +293,16 @@ def dashboard():
 
 
 @app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
     """User registration page - only regular user signup"""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        confirm_password = request.form['confirm_password']
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
         
         # Validation
         if not username or not password:
@@ -332,97 +333,19 @@ def register():
             admin_approved=False   # Not approved as admin
         )
         
-        db.session.add(new_user)
-        db.session.commit()
-        
-        flash('Registration successful! Please login.', 'success')
-        return redirect(url_for('login'))
-        return render_template('register.html')
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Registration successful! Please login.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            flash('Registration failed. Please try again.', 'error')
+            return render_template('register.html')
+    
+    # GET request - show the registration form
+    return render_template('register.html')
 
-
-@app.route('/admin/approvals')
-@admin_required
-def admin_approvals():
-    """Admin panel to view and approve admin requests"""
-    # Get pending admin requests
-    pending_requests = User.query.filter(
-        User.admin_requested == True,
-        User.admin_approved == False
-    ).all()
-    
-    # Get all admins
-    all_admins = User.query.filter(
-        User.is_admin == True,
-        User.admin_approved == True
-    ).all()
-    
-    return render_template('admin_approvals.html',
-                         pending_requests=pending_requests,
-                         all_admins=all_admins)
-
-@app.route('/admin/approve/<int:user_id>')
-@admin_required
-def approve_admin(user_id):
-    """Approve an admin request"""
-    user_to_approve = User.query.get_or_404(user_id)
-    current_user = User.query.get(session['user_id'])
-    
-    if not user_to_approve.admin_requested:
-        flash('This user has not requested admin access', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    user_to_approve.is_admin = True
-    user_to_approve.admin_approved = True
-    user_to_approve.approved_by = current_user.id
-    user_to_approve.approved_at = datetime.utcnow()
-    
-    db.session.commit()
-    
-    flash(f'Admin access approved for {user_to_approve.username}', 'success')
-    return redirect(url_for('admin_approvals'))
-
-@app.route('/admin/reject/<int:user_id>')
-@admin_required
-def reject_admin(user_id):
-    """Reject an admin request"""
-    user_to_reject = User.query.get_or_404(user_id)
-    
-    if not user_to_reject.admin_requested:
-        flash('This user has not requested admin access', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    user_to_reject.admin_requested = False
-    user_to_reject.is_admin = False
-    
-    db.session.commit()
-    
-    flash(f'Admin request rejected for {user_to_reject.username}', 'info')
-    return redirect(url_for('admin_approvals'))
-
-@app.route('/admin/revoke/<int:user_id>')
-@admin_required
-def revoke_admin(user_id):
-    """Revoke admin privileges (only for super admin)"""
-    current_user = User.query.get(session['user_id'])
-    user_to_revoke = User.query.get_or_404(user_id)
-    
-    # Prevent self-revocation and revoking super admin
-    if user_to_revoke.id == current_user.id:
-        flash('You cannot revoke your own admin privileges', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    if user_to_revoke.username == 'admin':
-        flash('Cannot revoke super admin privileges', 'error')
-        return redirect(url_for('admin_approvals'))
-    
-    user_to_revoke.is_admin = False
-    user_to_revoke.admin_approved = False
-    user_to_revoke.admin_requested = False
-    
-    db.session.commit()
-    
-    flash(f'Admin privileges revoked for {user_to_revoke.username}', 'success')
-    return redirect(url_for('admin_approvals'))
 
 
 
