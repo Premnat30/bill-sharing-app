@@ -1,6 +1,18 @@
-# auth_middleware.py
 from functools import wraps
-from flask import session, flash, redirect, url_for
+from flask import session, flash, redirect, url_for, current_app
+from flask_sqlalchemy import SQLAlchemy
+
+def get_current_user():
+    """Helper function to get current user without circular imports"""
+    if 'user_id' not in session:
+        return None
+    
+    try:
+        with current_app.app_context():
+            from app import User
+            return User.query.get(session['user_id'])
+    except Exception:
+        return None
 
 def login_required(f):
     @wraps(f)
@@ -14,15 +26,16 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
+        user = get_current_user()
+        if not user:
             flash('Please login first', 'error')
             return redirect(url_for('login'))
         
-        # Check if user is approved admin
-        from app import User, db
+        # Check admin status with safe attribute access
+        is_admin = getattr(user, 'is_admin', False)
+        admin_approved = getattr(user, 'admin_approved', False)
         
-        user = User.query.get(session['user_id'])
-        if not user or not user.is_admin or not getattr(user, 'admin_approved', False):
+        if not is_admin or not admin_approved:
             flash('Admin access required. Please wait for admin approval.', 'error')
             return redirect(url_for('dashboard'))
             
@@ -32,16 +45,17 @@ def admin_required(f):
 def super_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
+        user = get_current_user()
+        if not user:
             flash('Please login first', 'error')
             return redirect(url_for('login'))
         
-        # Check if user is the original super admin
-        from app import User
-        user = User.query.get(session['user_id'])
+        # Flexible super admin check
+        is_super_admin = (getattr(user, 'is_super_admin', False) or 
+                         getattr(user, 'role', '') == 'super_admin' or
+                         user.username == 'admin')
         
-        # Super admin is the first admin user (usually username 'admin')
-        if not user or user.username != 'admin':
+        if not is_super_admin:
             flash('Super admin access required', 'error')
             return redirect(url_for('dashboard'))
             
