@@ -45,10 +45,14 @@ class User(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-   @property
+    
+    # Property methods - PROPERLY INDENTED
+    @property
     def is_super_admin(self):
-        return self.username == 'admin' or self.role == 'super_admin'
+        return self.username == 'admin' or getattr(self, 'role', '') == 'super_admin'
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
 
 
 class Friend(db.Model):
