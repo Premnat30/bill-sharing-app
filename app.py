@@ -294,7 +294,7 @@ def dashboard():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration page with admin approval system"""
+    """User registration page - only regular user signup"""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
@@ -302,7 +302,6 @@ def register():
         username = request.form['username']
         password = request.form['password']
         confirm_password = request.form['confirm_password']
-        role = request.form.get('role', 'user')
         
         # Validation
         if not username or not password:
@@ -323,39 +322,23 @@ def register():
             flash('Username already exists', 'error')
             return render_template('register.html')
         
-        # Handle admin registration differently
-        is_admin = (role == 'admin')
-        admin_requested = (role == 'admin')
-        admin_approved = False
-        
-        # Auto-approve if it's the first user (super admin)
-        first_user = User.query.count() == 0
-        if first_user and role == 'admin':
-            admin_approved = True
-            is_admin = True
-            flash('Super admin account created successfully!', 'success')
-        
-        # Create new user
+        # Create new user as regular user (no admin role)
         new_user = User(
             username=username,
             password=generate_password_hash(password),
-            is_admin=is_admin,
-            role=role,
-            admin_requested=admin_requested,
-            admin_approved=admin_approved
+            is_admin=False,  # Always false for new registrations
+            role='user',     # Always 'user' role
+            admin_requested=False,  # No admin requests
+            admin_approved=False   # Not approved as admin
         )
         
         db.session.add(new_user)
         db.session.commit()
         
-        if role == 'admin' and not first_user:
-            flash('Admin registration requested! Please wait for approval from existing admin.', 'warning')
-        else:
-            flash('Registration successful! Please login.', 'success')
-        
+        flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
-    
-    return render_template('register.html')
+        return render_template('register.html')
+
 
 @app.route('/admin/approvals')
 @admin_required
