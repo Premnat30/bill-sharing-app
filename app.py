@@ -4,7 +4,6 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-from auth_middleware import admin_required, login_required, super_admin_required
 
 
 app = Flask(__name__)
@@ -100,6 +99,7 @@ class BillShare(db.Model):
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
 
+from auth_middleware import login_required, admin_required, super_admin_required
 
 def login_required(f):
     @wraps(f)
