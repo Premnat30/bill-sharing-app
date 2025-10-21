@@ -4,14 +4,8 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-from auth_middleware import admin_required, login_required
+from auth_middleware import admin_required, login_required, super_admin_required
 
-from functools import wraps
-from flask import session, flash, redirect, url_for
-import csv
-import io
-import requests
-import re
 
 app = Flask(__name__)
 
@@ -36,28 +30,26 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 db = SQLAlchemy(app)
 
 class User(db.Model):
+    __tablename__ = 'user'
+    __table_args__ = {'extend_existing': True}
+    
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     role = db.Column(db.String(20), default='user')
     
-    # ADD THESE NEW FIELDS FOR ADMIN APPROVAL SYSTEM
+    # Admin approval system fields
     admin_requested = db.Column(db.Boolean, default=False)
     admin_approved = db.Column(db.Boolean, default=False)
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-class User(db.Model):
-    __tablename__ = 'user'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
-    
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
-    role = db.Column(db.String(20), default='user')  # New role field
+
+   @property
+    def is_super_admin(self):
+        return self.username == 'admin' or self.role == 'super_admin'
+
 
 class Friend(db.Model):
     __tablename__ = 'friend'
@@ -300,6 +292,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -889,6 +882,26 @@ def logout():
     flash(f'Goodbye {username}! You have been logged out successfully.', 'info')
     return redirect(url_for('logout_confirmation'))
 
+@app.route('/super-admin/dashboard')
+@super_admin_required
+def super_admin_dashboard():
+    """Only super admin can access this"""
+    return render_template('super_admin_dashboard.html')
+
+@app.route('/admin/manage-users')
+@admin_required
+def manage_users():
+    """Regular admins can access this"""
+    user = get_current_user()
+    
+    # You can also check super admin status in routes
+    if user.is_super_admin:
+        # Super admin specific logic
+        flash('You have super admin privileges', 'info')
+    
+    return render_template('manage_users.html')
+    
+
 @app.route('/logout/confirm')
 def logout_confirmation():
     """Logout confirmation page"""
@@ -944,16 +957,14 @@ def initialize_database():
         with app.app_context():
             db.create_all()
             
-            # Run migration
-            migrate_database()
-            
             # Create default admin user if it doesn't exist
             if not User.query.filter_by(username='admin').first():
                 admin_user = User(
                     username='admin',
                     password=generate_password_hash('admin123'),
                     is_admin=True,
-                    role='admin'
+                    role='admin',
+                    admin_approved=True  # Auto-approve super admin
                 )
                 db.session.add(admin_user)
                 db.session.commit()
@@ -962,7 +973,7 @@ def initialize_database():
     except Exception as e:
         print(f"Database initialization error: {e}")
 
-# Initialize database when app starts
+# Initialize database
 initialize_database()
 
 if __name__ == '__main__':
