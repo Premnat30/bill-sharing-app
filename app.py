@@ -4,30 +4,31 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-
+import csv
+import io
+import requests
+import re
 
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///bill_sharing.db')
 
-# Handle PostgreSQL URL for Render
 if database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# File upload configuration for Render
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Create upload directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
+# MODELS
 class User(db.Model):
     __tablename__ = 'user'
     __table_args__ = {'extend_existing': True}
@@ -37,26 +38,19 @@ class User(db.Model):
     password = db.Column(db.String(120), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     role = db.Column(db.String(20), default='user')
-    
-    # Admin approval system fields
     admin_requested = db.Column(db.Boolean, default=False)
     admin_approved = db.Column(db.Boolean, default=False)
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Property methods - PROPERLY INDENTED
     @property
     def is_super_admin(self):
         return self.username == 'admin' or getattr(self, 'role', '') == 'super_admin'
-    
-    def __repr__(self):
-        return f'<User {self.username}>'
-
 
 class Friend(db.Model):
     __tablename__ = 'friend'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
+    __table_args__ = {'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -68,7 +62,7 @@ class Friend(db.Model):
 
 class Bill(db.Model):
     __tablename__ = 'bill'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
+    __table_args__ = {'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -84,7 +78,7 @@ class Bill(db.Model):
 
 class BillShare(db.Model):
     __tablename__ = 'bill_share'
-    __table_args__ = {'extend_existing': True}  # ADD THIS LINE
+    __table_args__ = {'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     bill_id = db.Column(db.Integer, db.ForeignKey('bill.id'), nullable=False)
@@ -99,6 +93,7 @@ class BillShare(db.Model):
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
 
+# IMPORT MIDDLEWARE - NO DUPLICATE FUNCTIONS
 from auth_middleware import login_required, admin_required, super_admin_required
 
 def login_required(f):
