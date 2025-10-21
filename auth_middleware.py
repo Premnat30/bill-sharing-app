@@ -1,12 +1,10 @@
+# auth_middleware.py
 from functools import wraps
 from flask import session, flash, redirect, url_for, current_app
-from flask_sqlalchemy import SQLAlchemy
 
 def get_current_user():
-    """Helper function to get current user without circular imports"""
     if 'user_id' not in session:
         return None
-    
     try:
         with current_app.app_context():
             from app import User
@@ -31,7 +29,6 @@ def admin_required(f):
             flash('Please login first', 'error')
             return redirect(url_for('login'))
         
-        # Check admin status with safe attribute access
         is_admin = getattr(user, 'is_admin', False)
         admin_approved = getattr(user, 'admin_approved', False)
         
@@ -50,12 +47,7 @@ def super_admin_required(f):
             flash('Please login first', 'error')
             return redirect(url_for('login'))
         
-        # Flexible super admin check
-        is_super_admin = (getattr(user, 'is_super_admin', False) or 
-                         getattr(user, 'role', '') == 'super_admin' or
-                         user.username == 'admin')
-        
-        if not is_super_admin:
+        if not getattr(user, 'is_super_admin', False):
             flash('Super admin access required', 'error')
             return redirect(url_for('dashboard'))
             
