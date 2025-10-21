@@ -1,4 +1,4 @@
-import os
+mport os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -93,32 +93,16 @@ class BillShare(db.Model):
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
 
-# IMPORT MIDDLEWARE - NO DUPLICATE FUNCTIONS
 from auth_middleware import login_required, admin_required, super_admin_required
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please login first', 'error')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
+def get_current_user():
+    if 'user_id' not in session:
+        return None
+    try:
+        return User.query.get(session['user_id'])
+    except Exception:
+        return None
 
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please login first', 'error')
-            return redirect(url_for('login'))
-        
-        user = User.query.get(session['user_id'])
-        if not user or not user.is_admin or not getattr(user, 'admin_approved', False):
-            flash('Admin access required. Please wait for admin approval.', 'error')
-            return redirect(url_for('dashboard'))
-            
-        return f(*args, **kwargs)
-    return decorated_function
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
