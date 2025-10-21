@@ -36,10 +36,10 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
-    role = db.Column(db.String(20), default='user')
-    admin_requested = db.Column(db.Boolean, default=False)
-    admin_approved = db.Column(db.Boolean, default=False)
+    is_admin = db.Column(db.Boolean, default=False)  # Default to False
+    role = db.Column(db.String(20), default='user')  # Default to 'user'
+    admin_requested = db.Column(db.Boolean, default=False)  # Default to False
+    admin_approved = db.Column(db.Boolean, default=False)   # Default to False
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
