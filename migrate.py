@@ -77,6 +77,17 @@ def run_migration():
                     print(f"⚠️ Warning: Could not add {column}: {column_error}")
                     continue
             
+            # ADD THE SUPER ADMIN PROPERTY TO USER MODEL DYNAMICALLY
+            print("🛠️ Adding is_super_admin property to User model...")
+            
+            # Define the property function
+            def is_super_admin(self):
+                return self.username == 'admin' or getattr(self, 'role', '') == 'super_admin'
+            
+            # Add the property to the User class
+            User.is_super_admin = property(is_super_admin)
+            print("✅ is_super_admin property added to User model!")
+            
             # Update existing users with new field values
             users = User.query.all()
             print(f"👥 Updating {len(users)} existing users...")
@@ -113,6 +124,13 @@ def run_migration():
                         user.role = 'admin'
                         updates.append("super_admin=auto-approved")
                     
+                    # TEST THE SUPER ADMIN PROPERTY
+                    try:
+                        is_super = user.is_super_admin
+                        updates.append(f"is_super_admin={is_super}")
+                    except Exception as prop_error:
+                        print(f"   ⚠️ Could not test is_super_admin for {user.username}: {prop_error}")
+                    
                     if updates:
                         print(f"   ✅ {user.username}: {', '.join(updates)}")
                         update_count += 1
@@ -129,6 +147,7 @@ def run_migration():
             print(f"   ✅ Columns added: {len(columns_to_add)}")
             print(f"   ✅ Users updated: {update_count}/{len(users)}")
             print(f"   ✅ Database type: {'PostgreSQL' if 'postgres' in database_url else 'SQLite'}")
+            print(f"   ✅ is_super_admin property: Added successfully")
             
             # Final verification
             print(f"\n🔍 FINAL USER STATUS:")
@@ -145,7 +164,11 @@ def run_migration():
                         admin_status = "👤 Regular User"
                     
                     role = getattr(user, 'role', 'N/A')
-                    print(f"   👤 {user.username}: {admin_status} (role: {role})")
+                    
+                    # Test super admin status
+                    super_admin_status = "🌟 SUPER ADMIN" if user.is_super_admin else ""
+                    
+                    print(f"   👤 {user.username}: {admin_status} (role: {role}) {super_admin_status}")
                     
                 except Exception as e:
                     print(f"   ❌ Error reading {user.username}: {e}")
