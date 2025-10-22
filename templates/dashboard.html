@@ -56,13 +56,6 @@
             <a class="nav-link" href="/friends"><i class="fas fa-users me-1"></i>Friends</a>
             <a class="nav-link" href="/bills"><i class="fas fa-file-invoice me-1"></i>Bills</a>
             
-            <!-- ADD ADMIN MENU ITEMS HERE -->
-            {% if session.get('role') == 'admin' and session.get('admin_approved') %}
-            <a class="nav-link" href="/add_bill"><i class="fas fa-plus-circle me-1"></i>Add Bill</a>
-            <a class="nav-link" href="/upload_bill_image"><i class="fas fa-upload me-1"></i>Upload Bill</a>
-            <a class="nav-link" href="/admin/approvals"><i class="fas fa-user-shield me-1"></i>Admin Approvals</a>
-            {% endif %}
-            
             <a class="nav-link" href="/share_bill"><i class="fas fa-share-alt me-1"></i>Share Bill</a>
             <a class="nav-link" href="/logout" onclick="return confirmLogout()">
                 <i class="fas fa-sign-out-alt me-1"></i>Logout ({{ session.username }})
