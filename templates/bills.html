@@ -62,6 +62,12 @@
             <i class="fas fa-trash"></i>
         </a>
     </div>
+
+    <div class="download-options">
+    <a href="{{ url_for('download_all_bills') }}" class="btn btn-primary">Download All Bills (CSV)</a>
+    <a href="{{ url_for('download_bills_range') }}" class="btn btn-secondary">Download by Date Range</a>
+    <a href="{{ url_for('download_friend_bills') }}" class="btn btn-info">Download Friend's Bills</a>
+</div>
 </td>
                             </tr>
                             {% endfor %}
