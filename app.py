@@ -1,9 +1,9 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 import csv
 import io
 import requests
@@ -373,6 +373,158 @@ def bills():
     user_bills = Bill.query.filter_by(user_id=session['user_id']).order_by(Bill.visit_date.desc()).all()
     return render_template('bills.html', bills=user_bills)
 
+# NEW: Download all bills as CSV
+@app.route('/bills/download_all')
+@login_required
+def download_all_bills():
+    """Download all bills as CSV"""
+    user_id = session['user_id']
+    bills = Bill.query.filter_by(user_id=user_id).order_by(Bill.visit_date.desc()).all()
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(['Bill ID', 'Restaurant Name', 'Visit Date', 'Base Amount', 'Discount', 'Service Charge', 'Tax', 'Total Amount', 'Created Date'])
+    
+    # Write bill data
+    total_base = 0
+    total_discount = 0
+    total_service = 0
+    total_tax = 0
+    total_overall = 0
+    
+    for bill in bills:
+        writer.writerow([
+            bill.id,
+            bill.restaurant_name,
+            bill.visit_date.strftime('%Y-%m-%d'),
+            f"${bill.base_amount:.2f}",
+            f"${bill.discount_amount:.2f}",
+            f"${bill.service_charge:.2f}",
+            f"${bill.tax_amount:.2f}",
+            f"${bill.total_amount:.2f}",
+            bill.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        ])
+        total_base += bill.base_amount
+        total_discount += bill.discount_amount
+        total_service += bill.service_charge
+        total_tax += bill.tax_amount
+        total_overall += bill.total_amount
+    
+    # Write totals
+    writer.writerow([])
+    writer.writerow(['TOTALS', '', '', 
+                    f"${total_base:.2f}", 
+                    f"${total_discount:.2f}", 
+                    f"${total_service:.2f}", 
+                    f"${total_tax:.2f}", 
+                    f"${total_overall:.2f}"])
+
+    # Prepare response
+    output.seek(0)
+    filename = f"all_bills_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename
+    )
+
+# NEW: Download bills by date range
+@app.route('/bills/download_range', methods=['GET', 'POST'])
+@login_required
+def download_bills_range():
+    """Download bills within a date range as CSV"""
+    if request.method == 'POST':
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+        
+        if not start_date or not end_date:
+            flash('Please select both start and end dates', 'error')
+            return redirect(url_for('bills'))
+        
+        try:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+            
+            if start_date_obj > end_date_obj:
+                flash('Start date cannot be after end date', 'error')
+                return redirect(url_for('bills'))
+                
+        except ValueError:
+            flash('Invalid date format', 'error')
+            return redirect(url_for('bills'))
+        
+        user_id = session['user_id']
+        bills = Bill.query.filter(
+            Bill.user_id == user_id,
+            Bill.visit_date >= start_date_obj,
+            Bill.visit_date <= end_date_obj
+        ).order_by(Bill.visit_date.desc()).all()
+        
+        if not bills:
+            flash('No bills found in the selected date range', 'error')
+            return redirect(url_for('bills'))
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(['Date Range', f'{start_date} to {end_date}'])
+        writer.writerow([])
+        writer.writerow(['Bill ID', 'Restaurant Name', 'Visit Date', 'Base Amount', 'Discount', 'Service Charge', 'Tax', 'Total Amount'])
+        
+        # Write bill data
+        total_base = 0
+        total_discount = 0
+        total_service = 0
+        total_tax = 0
+        total_overall = 0
+        
+        for bill in bills:
+            writer.writerow([
+                bill.id,
+                bill.restaurant_name,
+                bill.visit_date.strftime('%Y-%m-%d'),
+                f"${bill.base_amount:.2f}",
+                f"${bill.discount_amount:.2f}",
+                f"${bill.service_charge:.2f}",
+                f"${bill.tax_amount:.2f}",
+                f"${bill.total_amount:.2f}"
+            ])
+            total_base += bill.base_amount
+            total_discount += bill.discount_amount
+            total_service += bill.service_charge
+            total_tax += bill.tax_amount
+            total_overall += bill.total_amount
+        
+        # Write totals
+        writer.writerow([])
+        writer.writerow(['TOTALS', '', '', 
+                        f"${total_base:.2f}", 
+                        f"${total_discount:.2f}", 
+                        f"${total_service:.2f}", 
+                        f"${total_tax:.2f}", 
+                        f"${total_overall:.2f}"])
+
+        # Prepare response
+        output.seek(0)
+        filename = f"bills_{start_date}_to_{end_date}.csv"
+        
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+    
+    # GET request - show date range form
+    return render_template('download_range.html')
+
 @app.route('/bills/delete/<int:bill_id>')
 @login_required
 def delete_bill(bill_id):
@@ -502,6 +654,109 @@ def generate_bill_shares_csv(bill, bill_shares_data):
     writer.writerow([])
     writer.writerow(['TOTAL', '', '', f"${total_food:.2f}", f"${total_tax:.2f}", f"${total_service_charge:.2f}", f"${total_share:.2f}"])
     return output.getvalue()
+
+# NEW: Friend's bill download by date range
+@app.route('/friend_bills/download', methods=['GET', 'POST'])
+@login_required
+def download_friend_bills():
+    """Download bills shared with friends within a date range"""
+    user_id = session['user_id']
+    
+    if request.method == 'POST':
+        friend_id = request.form.get('friend_id')
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+        
+        if not friend_id or not start_date or not end_date:
+            flash('Please select friend and both date ranges', 'error')
+            return redirect(url_for('download_friend_bills'))
+        
+        try:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+            
+            if start_date_obj > end_date_obj:
+                flash('Start date cannot be after end date', 'error')
+                return redirect(url_for('download_friend_bills'))
+                
+        except ValueError:
+            flash('Invalid date format', 'error')
+            return redirect(url_for('download_friend_bills'))
+        
+        # Get friend details
+        friend = Friend.query.filter_by(id=friend_id, user_id=user_id).first()
+        if not friend:
+            flash('Friend not found', 'error')
+            return redirect(url_for('download_friend_bills'))
+        
+        # Get bills shared with this friend in the date range
+        bill_shares = BillShare.query.join(Bill).filter(
+            BillShare.friend_id == friend_id,
+            Bill.user_id == user_id,
+            Bill.visit_date >= start_date_obj,
+            Bill.visit_date <= end_date_obj
+        ).order_by(Bill.visit_date.desc()).all()
+        
+        if not bill_shares:
+            flash(f'No bills found for {friend.name} in the selected date range', 'error')
+            return redirect(url_for('download_friend_bills'))
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(['Friend Bills Report'])
+        writer.writerow(['Friend:', friend.name])
+        writer.writerow(['WhatsApp:', f"{friend.country_code}{friend.whatsapp_number}"])
+        writer.writerow(['Date Range:', f'{start_date} to {end_date}'])
+        writer.writerow(['Generated On:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow([])
+        writer.writerow(['Visit Date', 'Restaurant', 'Food Item', 'Food Amount', 'Tax Share', 'Service Charge', 'Total Share'])
+        
+        # Write bill share data
+        total_food = 0
+        total_tax = 0
+        total_service = 0
+        total_overall = 0
+        
+        for share in bill_shares:
+            writer.writerow([
+                share.bill.visit_date.strftime('%Y-%m-%d'),
+                share.bill.restaurant_name,
+                share.food_item,
+                f"${share.food_amount:.2f}",
+                f"${share.tax_share:.2f}",
+                f"${share.service_charge_share:.2f}",
+                f"${share.total_share:.2f}"
+            ])
+            total_food += share.food_amount
+            total_tax += share.tax_share
+            total_service += share.service_charge_share
+            total_overall += share.total_share
+        
+        # Write totals
+        writer.writerow([])
+        writer.writerow(['TOTALS', '', '', 
+                        f"${total_food:.2f}", 
+                        f"${total_tax:.2f}", 
+                        f"${total_service:.2f}", 
+                        f"${total_overall:.2f}"])
+
+        # Prepare response
+        output.seek(0)
+        filename = f"{friend.name}_bills_{start_date}_to_{end_date}.csv"
+        
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+    
+    # GET request - show form with friends list
+    friends = Friend.query.filter_by(user_id=user_id).order_by(Friend.name).all()
+    return render_template('download_friend_bills.html', friends=friends)
 
 @app.route('/get_bill_details/<int:bill_id>')
 @login_required
