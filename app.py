@@ -28,7 +28,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
-# MODELS
+# MODELS - SIMPLIFIED
 class User(db.Model):
     __tablename__ = 'user'
     __table_args__ = {'extend_existing': True}
@@ -36,17 +36,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)  # Default to False
-    role = db.Column(db.String(20), default='user')  # Default to 'user'
-    admin_requested = db.Column(db.Boolean, default=False)  # Default to False
-    admin_approved = db.Column(db.Boolean, default=False)   # Default to False
-    approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    @property
-    def is_super_admin(self):
-        return self.username == 'admin' or getattr(self, 'role', '') == 'super_admin'
 
 class Friend(db.Model):
     __tablename__ = 'friend'
@@ -93,7 +83,16 @@ class BillShare(db.Model):
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
 
-from auth_middleware import login_required, admin_required, super_admin_required
+# SIMPLIFIED AUTH MIDDLEWARE (remove admin checks)
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def get_current_user():
     if 'user_id' not in session:
@@ -102,7 +101,6 @@ def get_current_user():
         return User.query.get(session['user_id'])
     except Exception:
         return None
-
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -226,23 +224,15 @@ def initialize_database():
     try:
         with app.app_context():
             db.create_all()
-            if not User.query.filter_by(username='admin').first():
-                admin_user = User(
-                    username='admin',
-                    password=generate_password_hash('admin123'),
-                    is_admin=True
-                )
-                db.session.add(admin_user)
-                db.session.commit()
-                print("Default admin user created successfully")
+            # Remove admin user creation - all users are equal
+            print("Database initialized successfully")
     except Exception as e:
         print(f"Database initialization error: {e}")
 
 # Initialize database
 initialize_database()
 
-# Routes
-# Routes - UPDATED
+# ROUTES - SIMPLIFIED
 @app.route('/')
 def index():
     """Home page - shows before login"""
@@ -266,8 +256,6 @@ def login():
         if user and check_password_hash(user.password, password):
             session['user_id'] = user.id
             session['username'] = user.username
-            session['is_admin'] = user.is_admin
-            session['role'] = user.role
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -277,8 +265,6 @@ def login():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     user_id = session['user_id']
     total_friends = Friend.query.filter_by(user_id=user_id).count()
     total_bills = Bill.query.filter_by(user_id=user_id).count()
@@ -291,11 +277,9 @@ def dashboard():
                          total_spending=total_spending,
                          recent_bills=recent_bills)
 
-
-@app.route('/register', methods=['GET', 'POST'])
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration page - only regular user signup"""
+    """User registration page - all users are equal"""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
@@ -323,14 +307,10 @@ def register():
             flash('Username already exists', 'error')
             return render_template('register.html')
         
-        # Create new user as regular user (no admin role)
+        # Create new user - no admin fields
         new_user = User(
             username=username,
-            password=generate_password_hash(password),
-            is_admin=False,  # Always false for new registrations
-            role='user',     # Always 'user' role
-            admin_requested=False,  # No admin requests
-            admin_approved=False   # Not approved as admin
+            password=generate_password_hash(password)
         )
         
         try:
@@ -343,17 +323,11 @@ def register():
             flash('Registration failed. Please try again.', 'error')
             return render_template('register.html')
     
-    # GET request - show the registration form
     return render_template('register.html')
 
-
-
-
 @app.route('/friends', methods=['GET', 'POST'])
+@login_required
 def friends():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
     if request.method == 'POST':
         name = request.form['name']
         country_code = request.form['country_code']
@@ -381,9 +355,8 @@ def friends():
     return render_template('friends.html', friends=user_friends)
 
 @app.route('/friends/delete/<int:friend_id>')
+@login_required
 def delete_friend(friend_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     friend = Friend.query.filter_by(id=friend_id, user_id=session['user_id']).first()
     if friend:
         BillShare.query.filter_by(friend_id=friend_id).delete()
@@ -395,16 +368,14 @@ def delete_friend(friend_id):
     return redirect(url_for('friends'))
 
 @app.route('/bills')
+@login_required
 def bills():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     user_bills = Bill.query.filter_by(user_id=session['user_id']).order_by(Bill.visit_date.desc()).all()
     return render_template('bills.html', bills=user_bills)
 
 @app.route('/bills/delete/<int:bill_id>')
+@login_required
 def delete_bill(bill_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     bill = Bill.query.filter_by(id=bill_id, user_id=session['user_id']).first()
     if bill:
         BillShare.query.filter_by(bill_id=bill_id).delete()
@@ -416,10 +387,8 @@ def delete_bill(bill_id):
     return redirect(url_for('bills'))
 
 @app.route('/add_bill', methods=['GET', 'POST'])
-@admin_required
+@login_required
 def add_bill():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     if request.method == 'POST':
         restaurant_name = request.form['restaurant_name']
         visit_date = request.form['visit_date']
@@ -445,9 +414,8 @@ def add_bill():
     return render_template('add_bill.html')
 
 @app.route('/share_bill', methods=['GET', 'POST'])
+@login_required
 def share_bill():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     user_id = session['user_id']
     if request.method == 'POST':
         bill_id = request.form['bill_id']
@@ -536,10 +504,8 @@ def generate_bill_shares_csv(bill, bill_shares_data):
     return output.getvalue()
 
 @app.route('/get_bill_details/<int:bill_id>')
-@admin_required
+@login_required
 def get_bill_details(bill_id):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'})
     bill = Bill.query.filter_by(id=bill_id, user_id=session['user_id']).first()
     if bill:
         return jsonify({
@@ -552,13 +518,10 @@ def get_bill_details(bill_id):
         })
     return jsonify({'error': 'Bill not found'})
 
-# NEW IMAGE UPLOAD & OCR ROUTES
+# IMAGE UPLOAD & OCR ROUTES
 @app.route('/upload_bill_image', methods=['GET', 'POST'])
-@admin_required
+@login_required
 def upload_bill_image():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
     if request.method == 'POST':
         if 'bill_image' not in request.files:
             flash('No file selected', 'error')
@@ -622,10 +585,8 @@ def upload_bill_image():
     return render_template('upload_bill_image.html')
 
 @app.route('/create_bill_from_ocr', methods=['POST'])
+@login_required
 def create_bill_from_ocr():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
     try:
         # Get form data
         restaurant_name = request.form['restaurant_name']
@@ -686,11 +647,10 @@ def create_bill_from_ocr():
         print(f"Exception: {e}")  # Debug
         return redirect(url_for('upload_bill_image'))
 
-# NEW WHATSAPP ROUTES
+# WHATSAPP ROUTES
 @app.route('/share_bill_whatsapp/<int:bill_id>')
+@login_required
 def share_bill_whatsapp(bill_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     bill = Bill.query.filter_by(id=bill_id, user_id=session['user_id']).first()
     if not bill:
         flash('Bill not found', 'error')
@@ -728,12 +688,9 @@ def create_whatsapp_message(bill, bill_shares_data):
     message += "Please transfer your share. Thank you! 🙏"
     return message
 
-# FIXED: Removed duplicate route - KEEP ONLY THIS ONE
 @app.route('/send_whatsapp_individual/<int:bill_id>/<int:friend_id>')
+@login_required
 def send_whatsapp_individual(bill_id, friend_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
     bill = Bill.query.filter_by(id=bill_id, user_id=session['user_id']).first()
     friend = Friend.query.filter_by(id=friend_id, user_id=session['user_id']).first()
     
@@ -771,32 +728,12 @@ def logout():
     flash(f'Goodbye {username}! You have been logged out successfully.', 'info')
     return redirect(url_for('logout_confirmation'))
 
-@app.route('/super-admin/dashboard')
-@super_admin_required
-def super_admin_dashboard():
-    """Only super admin can access this"""
-    return render_template('super_admin_dashboard.html')
-
-@app.route('/admin/manage-users')
-@admin_required
-def manage_users():
-    """Regular admins can access this"""
-    user = get_current_user()
-    
-    # You can also check super admin status in routes
-    if user.is_super_admin:
-        # Super admin specific logic
-        flash('You have super admin privileges', 'info')
-    
-    return render_template('manage_users.html')
-    
-
 @app.route('/logout/confirm')
 def logout_confirmation():
     """Logout confirmation page"""
     return render_template('logout.html')
 
-# Add this at the VERY END of app.py - AFTER all your routes
+# ERROR HANDLERS
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('404.html'), 404
@@ -805,65 +742,6 @@ def not_found_error(error):
 def internal_error(error):
     db.session.rollback()
     return render_template('500.html'), 500
-
-# Database migration function
-def migrate_database():
-    """Run database migrations for role-based access control"""
-    try:
-        with app.app_context():
-            # Check if role column exists in User table
-            from sqlalchemy import inspect
-            inspector = inspect(db.engine)
-            columns = [col['name'] for col in inspector.get_columns('user')]
-            
-            if 'role' not in columns:
-                print("Adding role column to user table...")
-                # For SQLite (development)
-                if 'sqlite' in database_url:
-                    db.engine.execute('ALTER TABLE user ADD COLUMN role VARCHAR(20)')
-                # For PostgreSQL (production)
-                else:
-                    db.engine.execute('ALTER TABLE "user" ADD COLUMN role VARCHAR(20)')
-                
-                # Set default roles for existing users
-                users = User.query.all()
-                for user in users:
-                    if not hasattr(user, 'role') or user.role is None:
-                        user.role = 'admin' if user.is_admin else 'user'
-                
-                db.session.commit()
-                print("Database migration completed successfully!")
-            else:
-                print("Role column already exists. Migration not needed.")
-                
-    except Exception as e:
-        print(f"Migration error: {e}")
-        db.session.rollback()
-
-# Initialize database with migration
-def initialize_database():
-    try:
-        with app.app_context():
-            db.create_all()
-            
-            # Create default admin user if it doesn't exist
-            if not User.query.filter_by(username='admin').first():
-                admin_user = User(
-                    username='admin',
-                    password=generate_password_hash('admin123'),
-                    is_admin=True,
-                    role='admin',
-                    admin_approved=True  # Auto-approve super admin
-                )
-                db.session.add(admin_user)
-                db.session.commit()
-                print("Default admin user created successfully")
-                
-    except Exception as e:
-        print(f"Database initialization error: {e}")
-
-# Initialize database
-initialize_database()
 
 if __name__ == '__main__':
     app.run(debug=True)
