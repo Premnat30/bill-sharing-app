@@ -61,7 +61,7 @@ class Bill(db.Model):
     base_amount = db.Column(db.Float, nullable=False)
     discount_amount = db.Column(db.Float, default=0.0)
     service_charge = db.Column(db.Float, default=0.0)
-    tax_amount = db.Column(db.Float, nullable=False)
+    tax_amount = db.Column(db.Float, nullable=0.0)
     total_amount = db.Column(db.Float, nullable=False)
     bill_image = db.Column(db.String(300))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -547,7 +547,7 @@ def add_bill():
         base_amount = float(request.form['base_amount'])
         discount_amount = float(request.form.get('discount_amount', 0))
         service_charge = float(request.form.get('service_charge', 0))
-        tax_amount = float(request.form['tax_amount'])
+        tax_amount = float(request.form['tax_amount',0])
         total_amount = base_amount - discount_amount + service_charge + tax_amount
         bill = Bill(
             user_id=session['user_id'],
@@ -578,8 +578,11 @@ def share_bill():
         if not bill:
             flash('Bill not found', 'error')
             return redirect(url_for('share_bill'))
-        tax_per_person = bill.tax_amount / len(friend_ids) if friend_ids else 0
-        service_charge_per_person = bill.service_charge / len(friend_ids) if friend_ids else 0
+        
+        # Calculate per-person shares (tax and service charge are optional)
+        tax_per_person = bill.tax_amount / len(friend_ids) if friend_ids and bill.tax_amount > 0 else 0
+        service_charge_per_person = bill.service_charge / len(friend_ids) if friend_ids and bill.service_charge > 0 else 0
+        
         bill_shares_data = []
         for i, friend_id in enumerate(friend_ids):
             if i < len(food_items) and i < len(food_amounts):
@@ -617,6 +620,7 @@ def share_bill():
     friends = Friend.query.filter_by(user_id=user_id).all()
     bills = Bill.query.filter_by(user_id=user_id).order_by(Bill.visit_date.desc()).all()
     return render_template('share_bill.html', friends=friends, bills=bills)
+
 
 def generate_bill_shares_csv(bill, bill_shares_data):
     output = io.StringIO()
@@ -849,7 +853,7 @@ def create_bill_from_ocr():
         base_amount = float(request.form.get('base_amount', 0))
         discount_amount = float(request.form.get('discount_amount', 0))
         service_charge = float(request.form.get('service_charge', 0))
-        tax_amount = float(request.form.get('tax_amount', 0))
+        tax_amount = float(request.form.get('tax_amount', 0))  # Made optional
         total_amount = float(request.form.get('total_amount', 0))
         image_filename = request.form.get('image_filename', '')
 
@@ -882,7 +886,7 @@ def create_bill_from_ocr():
             base_amount=base_amount,
             discount_amount=discount_amount,
             service_charge=service_charge,
-            tax_amount=tax_amount,
+            tax_amount=tax_amount,  # Now accepts 0
             total_amount=total_amount,
             bill_image=image_filename
         )
