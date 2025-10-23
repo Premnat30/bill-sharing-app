@@ -61,7 +61,7 @@ class Bill(db.Model):
     base_amount = db.Column(db.Float, nullable=False)
     discount_amount = db.Column(db.Float, default=0.0)
     service_charge = db.Column(db.Float, default=0.0)
-    tax_amount = db.Column(db.Float, nullable=0.0)
+    tax_amount = db.Column(db.Float, default=0.0)  # Changed to default 0.0
     total_amount = db.Column(db.Float, nullable=False)
     bill_image = db.Column(db.String(300))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -75,13 +75,14 @@ class BillShare(db.Model):
     friend_id = db.Column(db.Integer, db.ForeignKey('friend.id'), nullable=False)
     food_item = db.Column(db.String(200), nullable=False)
     food_amount = db.Column(db.Float, nullable=False)
-    tax_share = db.Column(db.Float, nullable=False)
+    tax_share = db.Column(db.Float, default=0.0)  # Changed to default 0.0
     service_charge_share = db.Column(db.Float, default=0.0)
     total_share = db.Column(db.Float, nullable=False)
     shared_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     bill = db.relationship('Bill', backref='shares')
     friend = db.relationship('Friend', backref='bill_shares')
+
 
 # SIMPLIFIED AUTH MIDDLEWARE (remove admin checks)
 def login_required(f):
@@ -547,8 +548,9 @@ def add_bill():
         base_amount = float(request.form['base_amount'])
         discount_amount = float(request.form.get('discount_amount', 0))
         service_charge = float(request.form.get('service_charge', 0))
-        tax_amount = float(request.form['tax_amount',0])
+        tax_amount = float(request.form.get('tax_amount', 0))  # Made optional with default 0
         total_amount = base_amount - discount_amount + service_charge + tax_amount
+        
         bill = Bill(
             user_id=session['user_id'],
             restaurant_name=restaurant_name,
@@ -556,7 +558,7 @@ def add_bill():
             base_amount=base_amount,
             discount_amount=discount_amount,
             service_charge=service_charge,
-            tax_amount=tax_amount,
+            tax_amount=tax_amount,  # Now accepts 0
             total_amount=total_amount
         )
         db.session.add(bill)
